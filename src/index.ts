@@ -16,7 +16,7 @@ interface ResultSuccess {
 
 interface ResultFailed {
   success: false;
-  message: string;
+  message?: string;
 }
 
 type ScrapeResult = ResultSuccess | ResultFailed;
@@ -43,7 +43,9 @@ bot.on('message', async (msg) => {
     return bot.sendMessage(chatId, `Model: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}`);
   }
 
-  return bot.sendMessage(chatId, `Error ${result.message}`);
+  if (result.message) {
+    return bot.sendMessage(chatId, `Error ${result.message}`);
+  }
 });
 
 
@@ -63,6 +65,10 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
       }
       throw e;
     }
+  }
+
+  if (msg.text?.startsWith('/') || !msg.text) {
+    return { success: false, };
   }
 
   if (!msg.text || (msg.text && msg.text.length < 4) || (msg.text && msg.text.length > 8)) {
