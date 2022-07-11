@@ -51,6 +51,10 @@ bot.on('message', async (msg) => {
 
 async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
 
+  async function sendUserMsg(str: string) {
+    await bot.sendMessage(msg.chat.id, str);
+  }
+
   function debugLog(str: string) {
     console.log(`[${msg.chat.id}] ${str}`);
   }
@@ -76,6 +80,7 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
   }
 
   debugLog(`Starting car search ${msg.text}`);
+  await sendUserMsg('Starting car search');
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
   await page.goto('https://vrl.lta.gov.sg/lta/vrl/action/pubfunc2?ID=EnquireRoadTaxExpDtProxy', { waitUntil: 'networkidle2' });
@@ -105,6 +110,7 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
     }
 
     debugLog("Captcha found. Submitting...");
+    await sendUserMsg('Trying to solve Catcha, please hold on as it might take up to 10s...');
     const result = await solver.imageCaptcha(fs.readFileSync(USER_SCREENSHOT, "base64"));
     debugLog(`Got Captcha result: ${JSON.stringify(result)}`);
     await page.type('#main-content > div.dt-container > div:nth-child(2) > form > div.form-group.clearfix > div > div > input.form-control', result.data, { delay: 100 });
