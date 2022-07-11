@@ -71,7 +71,7 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
     return { success: false, };
   }
 
-  if (!msg.text || (msg.text && msg.text.length < 4) || (msg.text && msg.text.length > 8)) {
+  if (!/^[A-Z]{1,3}\d{1,4}[A-Z]$/.test(msg.text)) {
     return { success: false, message: 'Please enter a valid car license plate' };
   }
 
