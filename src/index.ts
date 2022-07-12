@@ -75,11 +75,12 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
     return { success: false, };
   }
 
-  if (!/^[A-Z]{1,3}\d{1,4}[A-Z]$/.test(msg.text)) {
+  const licensePlate = msg.text.trim().toUpperCase();
+  if (!/^[A-Z]{1,3}\d{1,4}[A-Z]$/.test(licensePlate)) {
     return { success: false, message: 'Please enter a valid car license plate' };
   }
 
-  debugLog(`Starting car search ${msg.text}`);
+  debugLog(`Searching for: ${licensePlate}`);
   await sendUserMsg('Starting car search');
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
@@ -114,7 +115,7 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
     const result = await solver.imageCaptcha(fs.readFileSync(USER_SCREENSHOT, "base64"));
     debugLog(`Got Captcha result: ${JSON.stringify(result)}`);
     await page.type('#main-content > div.dt-container > div:nth-child(2) > form > div.form-group.clearfix > div > div > input.form-control', result.data, { delay: 100 });
-    await page.type('#vehNoField', msg.text as string);
+    await page.type('#vehNoField', licensePlate);
     await page.click('#agreeTCbox');
     await page.click('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-btn-group > button');
 
