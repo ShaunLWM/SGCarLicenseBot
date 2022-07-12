@@ -1,6 +1,6 @@
 import fs from "fs";
 
-export const TEMPORARY_CACHE_DIRECTORY = './cache';
+export const TEMPORARY_CACHE_DIRECTORY = './.cache';
 
 export async function wait(ms = 1000) {
     return new Promise(resolve => setTimeout(resolve, ms));

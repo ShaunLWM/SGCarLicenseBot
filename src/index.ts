@@ -81,7 +81,7 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
   }
 
   debugLog(`Searching for: ${licensePlate}`);
-  await sendUserMsg('Starting car search');
+  await sendUserMsg(`Searching for: ${licensePlate}`);
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
   await page.goto('https://vrl.lta.gov.sg/lta/vrl/action/pubfunc2?ID=EnquireRoadTaxExpDtProxy', { waitUntil: 'networkidle2' });
