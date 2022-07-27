@@ -29,29 +29,47 @@ const bot = new TelegramBot(process.env.TELEGRAM_TOKEN as string, { polling: tru
 const solver = new Captcha.Solver(process.env.CAPTCHA_KEY as string);
 
 bot.on('message', async (msg) => {
-  await bot.sendChatAction(msg.chat.id, 'typing');
-  const chatId = msg.chat.id;
-  const result = await startCarSearch(msg);
+  handleMesage(msg);
+});
+
+bot.on('callback_query', async (msg) => {
+  handleMesage(msg, true);
+});
+
+const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQuery, isForceResearch = false) => {
+  const msg = {
+    text: (isNormalMessage(message) ? message.text : message.data) || '',
+    chatId: isNormalMessage(message) ? message.chat.id : message.from.id,
+  }
+
+  if (!msg.text) {
+    return;
+  }
+
+  await bot.sendChatAction(msg.chatId, 'typing');
+  const result = await startCarSearch(msg, isForceResearch);
   if (result.success) {
     const opts: TelegramBot.SendMessageOptions = {
       reply_markup: {
-        inline_keyboard: [[{ text: 'Force Update', callback_data: 'force_update' }]]
+        inline_keyboard: [[{ text: 'Force Update', callback_data: result.license }]]
       }
     };
 
-    return bot.sendMessage(chatId,
+    return bot.sendMessage(msg.chatId,
       `Model: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}${result.lastUpdated ? `\nLast Updated: ${result.lastUpdated}` : ''}`,
       result.lastUpdated ? opts : undefined);
   }
 
   if (result.message) {
-    return bot.sendMessage(chatId, `Error ${result.message}`);
+    return bot.sendMessage(msg.chatId, `Error ${result.message}`);
   }
-});
+};
 
+function isNormalMessage(msg: TelegramBot.Message | TelegramBot.CallbackQuery): msg is TelegramBot.Message {
+  return (msg as TelegramBot.Message)?.chat?.id !== undefined;
+}
 
-async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
-
+async function startCarSearch(msg: { text: string, chatId: number }, isForceResearch: boolean): Promise<ScrapeResult> {
   async function findExistingCar(str: string) {
     try {
       return Car.findOne({ license: str }).exec();
@@ -61,11 +79,11 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
   }
 
   async function sendUserMsg(str: string) {
-    await bot.sendMessage(msg.chat.id, str);
+    await bot.sendMessage(msg.chatId, str);
   }
 
   function debugLog(str: string) {
-    console.log(`[${msg.chat.id}] ${str}`);
+    console.log(`[${msg.chatId}] ${str}`);
   }
 
   async function waitForElement(selector: string) {
@@ -89,15 +107,18 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
     return { success: false, message: 'Please enter a valid car license plate' };
   }
 
-  const existingCar = await findExistingCar(licensePlate);
-  if (existingCar) {
-    const response: ResultSuccess = {
-      success: true,
-      carMake: existingCar.carMake,
-      roadTaxExpiry: existingCar.tax,
-      lastUpdated: dayjs(existingCar.lastUpdated).fromNow(),
-    };
-    return response;
+  if (!isForceResearch) {
+    const existingCar = await findExistingCar(licensePlate);
+    if (existingCar) {
+      const response: ResultSuccess = {
+        success: true,
+        license: licensePlate,
+        carMake: existingCar.carMake,
+        roadTaxExpiry: existingCar.tax,
+        lastUpdated: dayjs(existingCar.lastUpdated).fromNow(),
+      };
+      return response;
+    }
   }
 
   debugLog(`Searching for: ${licensePlate}`);
@@ -114,7 +135,7 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
     throw new Error('No Captcha found');
   }
 
-  const USER_SCREENSHOT = createDirectory(`screenshot_${msg.chat.id}.png`);
+  const USER_SCREENSHOT = createDirectory(`screenshot_${msg.chatId}.png`);
   await captchaElement.screenshot({ path: USER_SCREENSHOT });
 
   try {
@@ -148,7 +169,7 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
       throw new Error('No results for car license plate');
     }
 
-    const response: ResultSuccess = { success: true, carMake: '' };
+    const response: ResultSuccess = { success: true, license: licensePlate, carMake: '' };
 
     const carMake = await element.evaluate(el => el.textContent);
     response['carMake'] = cleanText(carMake || '');
@@ -162,12 +183,7 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
     debugLog("Success. Returning results to user..");
     await Promise.allSettled([
       browser.close(),
-      Car.create({
-        lastUpdated: new Date(),
-        license: licensePlate,
-        carMake: response.carMake,
-        tax: response.roadTaxExpiry,
-      })
+      Car.findOneAndUpdate({ license: licensePlate }, { carMake: response.carMake, tax: response.roadTaxExpiry, lastUpdated: new Date() }, { upsert: true }).exec(),
     ]);
     return response;
   } catch (error) {

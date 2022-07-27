@@ -1,5 +1,6 @@
 interface ResultSuccess {
   success: true;
+  license: string;
   carMake: string;
   roadTaxExpiry?: string;
   lastUpdated?: string;
