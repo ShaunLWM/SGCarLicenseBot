@@ -1,26 +1,19 @@
+process.env.NTBA_FIX_319 = 1 as any;
 import "dotenv/config";
 
 import * as Captcha from "2captcha";
+import dayjs from "dayjs";
+import RelativeTime from "dayjs/plugin/relativeTime";
 import fs from "fs";
 import Jimp from "jimp";
+import mongoose from "mongoose";
 import TelegramBot from "node-telegram-bot-api";
-import puppeteer, { TimeoutError } from 'puppeteer';
+import puppeteer, { TimeoutError } from "puppeteer";
 
-import { cleanText, cleanupCache, createDirectory, TEMPORARY_CACHE_DIRECTORY, wait } from './lib/Helper';
+import { cleanText, cleanupCache, createDirectory, TEMPORARY_CACHE_DIRECTORY, wait } from "./lib/Helper";
+import Car from "./models/Car";
 
-interface ResultSuccess {
-  success: true;
-  carMake: string;
-  roadTaxExpiry?: string;
-}
-
-interface ResultFailed {
-  success: false;
-  message?: string;
-}
-
-type ScrapeResult = ResultSuccess | ResultFailed;
-
+dayjs.extend(RelativeTime);
 
 if (!fs.existsSync(TEMPORARY_CACHE_DIRECTORY)) {
   fs.mkdirSync(TEMPORARY_CACHE_DIRECTORY);
@@ -40,7 +33,15 @@ bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const result = await startCarSearch(msg);
   if (result.success) {
-    return bot.sendMessage(chatId, `Model: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}`);
+    const opts: TelegramBot.SendMessageOptions = {
+      reply_markup: {
+        inline_keyboard: [[{ text: 'Force Update', callback_data: 'force_update' }]]
+      }
+    };
+
+    return bot.sendMessage(chatId,
+      `Model: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}${result.lastUpdated ? `\nLast Updated: ${result.lastUpdated}` : ''}`,
+      result.lastUpdated ? opts : undefined);
   }
 
   if (result.message) {
@@ -50,6 +51,14 @@ bot.on('message', async (msg) => {
 
 
 async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
+
+  async function findExistingCar(str: string) {
+    try {
+      return Car.findOne({ license: str }).exec();
+    } catch (e) {
+      return undefined;
+    }
+  }
 
   async function sendUserMsg(str: string) {
     await bot.sendMessage(msg.chat.id, str);
@@ -78,6 +87,17 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
   const licensePlate = msg.text.trim().toUpperCase();
   if (!/^[A-Z]{1,3}\d{1,4}[A-Z]$/.test(licensePlate)) {
     return { success: false, message: 'Please enter a valid car license plate' };
+  }
+
+  const existingCar = await findExistingCar(licensePlate);
+  if (existingCar) {
+    const response: ResultSuccess = {
+      success: true,
+      carMake: existingCar.carMake,
+      roadTaxExpiry: existingCar.tax,
+      lastUpdated: dayjs(existingCar.lastUpdated).fromNow(),
+    };
+    return response;
   }
 
   debugLog(`Searching for: ${licensePlate}`);
@@ -140,7 +160,15 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
     }
 
     debugLog("Success. Returning results to user..");
-    await browser.close();
+    await Promise.allSettled([
+      browser.close(),
+      Car.create({
+        lastUpdated: new Date(),
+        license: licensePlate,
+        carMake: response.carMake,
+        tax: response.roadTaxExpiry,
+      })
+    ]);
     return response;
   } catch (error) {
     console.error(error);
@@ -151,3 +179,10 @@ async function startCarSearch(msg: TelegramBot.Message): Promise<ScrapeResult> {
     cleanupCache(USER_SCREENSHOT);
   }
 }
+
+async function setup() {
+  await mongoose.connect(process.env.MONGO_DB as string);
+  console.log("[db] connected..");
+}
+
+setup();
