@@ -1,6 +1,6 @@
 {
   "name": "SGCarLicenseBot",
-  "version": "1.0.0",
+  "version": "0.0.1-alpha.1",
   "main": "index.js",
   "repository": "git@github.com:ShaunLWM/SGCarLicenseBot.git",
   "author": "ShaunLWM <shaunlimweimin@gmail.com>",
