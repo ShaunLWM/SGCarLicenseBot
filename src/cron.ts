@@ -36,19 +36,12 @@ async function onScrape() {
     const successfulCarInfos = (carInfos.filter(info => info.status === "fulfilled") as PromiseFulfilledResult<any>[]).map(info => info.value);
     console.log(`[cron] ${successfulCarInfos.length} scraped cars. ${existingCars.length} existing cars.`);
 
-    if (existingCars.length < 1) {
-      const newCars = successfulCarInfos.map(info => new TrackedCar({ carId: info.id, name: info.name, data: JSON.stringify(info) }));
-      const results = await TrackedCar.insertMany(newCars);
-      console.log(`[cron] inserted ${results.length} new cars`);
-      page += 1;
-      continue;
-    }
-
     for (const existingCar of existingCars) {
       // for each of the existing cars, check if the scraped data is successful
-      const carInfo = successfulCarInfos.find(info => info.id === existingCar.carId);
-      if (!carInfo) continue;
+      const carIndex = successfulCarInfos.findIndex(info => info.id === existingCar.carId);
+      if (!carIndex) continue;
 
+      const carInfo = successfulCarInfos[carIndex];
       // check the diff and check if the diff has keys
       const diff = detailedDiff(JSON.parse(existingCar.data), carInfo) as DiffObject;
       if (Object.keys(diff["added"]).length < 1 && Object.keys(diff["deleted"]).length < 1 && Object.keys(diff["updated"]).length < 1) {
@@ -61,6 +54,14 @@ async function onScrape() {
         new CarHistory({ carId: existingCar.carId, from: existingCar.data, to: JSON.stringify(carInfo), lastUpdated: new Date() }).save(),
         existingCar.save()
       ]);
+
+      successfulCarInfos.splice(carIndex, 1);
+    }
+
+    if (successfulCarInfos.length > 0 || existingCars.length < 1) {
+      const newCars = successfulCarInfos.map(info => new TrackedCar({ carId: info.id, name: info.name, data: JSON.stringify(info) }));
+      const results = await TrackedCar.insertMany(newCars);
+      console.log(`[cron] inserted ${results.length} new cars`);
     }
 
     page += 1;
