@@ -1,7 +1,5 @@
 import { Document, Model, model, Schema } from "mongoose";
 
-export const RowItemType = ["liquidity", "freezer", "staking", "lending", "pricing"];
-
 export interface IRowItemData {
   type: "liquidity" | "freezer" | "staking" | "lending" | "pricing";
   date: Date;
