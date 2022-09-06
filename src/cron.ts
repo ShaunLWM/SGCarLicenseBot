@@ -39,12 +39,15 @@ async function onScrape() {
     for (const existingCar of existingCars) {
       // for each of the existing cars, check if the scraped data is successful
       const carIndex = successfulCarInfos.findIndex(info => info.id === existingCar.carId);
-      if (!carIndex) continue;
+      if (carIndex < 0) {
+        continue;
+      }
 
       const carInfo = successfulCarInfos[carIndex];
       // check the diff and check if the diff has keys
       const diff = detailedDiff(JSON.parse(existingCar.data), carInfo) as DiffObject;
       if (Object.keys(diff["added"]).length < 1 && Object.keys(diff["deleted"]).length < 1 && Object.keys(diff["updated"]).length < 1) {
+        successfulCarInfos.splice(carIndex, 1);
         continue;
       }
 
@@ -69,6 +72,8 @@ async function onScrape() {
       console.error("[limit] reached page 20 or current page < 20, stopping..");
       break;
     }
+
+    console.log(`------------------`);
   }
 
   process.exit(0);
