@@ -11,6 +11,7 @@ const ICarHistorySchemaFields: Record<keyof ICarHistory, any> = {
   carId: {
     type: String,
     required: true,
+    unique: true,
   },
   from: {
     type: String,

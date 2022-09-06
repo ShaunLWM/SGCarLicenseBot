@@ -10,6 +10,7 @@ const CarSchemaFields: Record<keyof ITrackedCar, any> = {
   carId: {
     type: String,
     required: true,
+    unique: true,
   },
   name: {
     type: String,
