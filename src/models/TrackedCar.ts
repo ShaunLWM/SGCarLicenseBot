@@ -4,6 +4,7 @@ export interface ITrackedCar {
   carId: string;
   name: string;
   data: string;
+  tag: string;
 }
 
 const CarSchemaFields: Record<keyof ITrackedCar, any> = {
@@ -17,6 +18,9 @@ const CarSchemaFields: Record<keyof ITrackedCar, any> = {
     required: true,
   },
   data: {
+    type: String,
+  },
+  tag: {
     type: String,
   }
 };

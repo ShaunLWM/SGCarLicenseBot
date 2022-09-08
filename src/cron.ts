@@ -12,6 +12,8 @@ interface DiffObject {
   updated: Record<string, any>;
 }
 
+const SEARCH_TERMS = "Mazda 3 Mild Hybrid";
+
 const client = new SGCarMart();
 
 async function onScrape() {
@@ -19,7 +21,7 @@ async function onScrape() {
 
   while (true) {
     console.log(`[scrape] page ${page}`);
-    const results = await client.getLatestUsed({ search: "mazda 3 mild hybrid", page });
+    const results = await client.getLatestUsed({ search: SEARCH_TERMS, page });
     if (results.length < 1) {
       console.log(`[cron] no results found on page ${page}`);
       break;
@@ -62,7 +64,7 @@ async function onScrape() {
     }
 
     if (successfulCarInfos.length > 0 || existingCars.length < 1) {
-      const newCars = successfulCarInfos.map(info => new TrackedCar({ carId: info.id, name: info.name, data: JSON.stringify(info) }));
+      const newCars = successfulCarInfos.map(info => new TrackedCar({ carId: info.id, name: info.name, data: JSON.stringify(info), tag: SEARCH_TERMS }));
       const results = await TrackedCar.insertMany(newCars);
       console.log(`[cron] inserted ${results.length} new cars`);
     }
