@@ -33,9 +33,7 @@ const CarSchemaFields: Record<keyof ICar, any> = {
   }
 };
 
-const CarSchema = new Schema<ICarDocument, ICarModel>(CarSchemaFields, {
-  timestamps: false,
-});
+const CarSchema = new Schema<ICarDocument, ICarModel>(CarSchemaFields);
 
 export interface ICarDocument extends ICar, Document { }
 

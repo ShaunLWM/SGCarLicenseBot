@@ -11,9 +11,7 @@ const ISearchTermSchemaFields: Record<keyof ISearchTerm, any> = {
   },
 };
 
-const ISearchTermSchema = new Schema<ISearchTermDocument, ISearchTermModel>(ISearchTermSchemaFields, {
-  timestamps: false,
-});
+const ISearchTermSchema = new Schema<ISearchTermDocument, ISearchTermModel>(ISearchTermSchemaFields);
 
 export interface ISearchTermDocument extends ISearchTerm, Document { }
 

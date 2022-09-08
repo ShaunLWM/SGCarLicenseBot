@@ -25,7 +25,7 @@ const CarSchemaFields: Record<keyof ITrackedCar, any> = {
   }
 };
 
-const ITrackedCarSchema = new Schema<ITrackedCarDocument, ITrackedCarModel>(CarSchemaFields);
+const ITrackedCarSchema = new Schema<ITrackedCarDocument, ITrackedCarModel>(CarSchemaFields, { timestamps: true });
 
 export interface ITrackedCarDocument extends ITrackedCar, Document { }
 
