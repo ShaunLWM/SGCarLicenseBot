@@ -1,10 +1,10 @@
-import { Document, Model, model, Schema } from "mongoose";
+import { Document, Model, model, Schema, Types } from "mongoose";
 
 export interface ITrackedCar {
   carId: string;
   name: string;
   data: string;
-  tag: string;
+  searchId: Types.ObjectId;
 }
 
 const CarSchemaFields: Record<keyof ITrackedCar, any> = {
@@ -20,8 +20,8 @@ const CarSchemaFields: Record<keyof ITrackedCar, any> = {
   data: {
     type: String,
   },
-  tag: {
-    type: String,
+  searchId: {
+    type: Schema.Types.ObjectId,
   }
 };
 

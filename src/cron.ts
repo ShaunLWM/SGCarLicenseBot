@@ -25,7 +25,7 @@ async function onScrape() {
   }
 
   for (const searchTerm of searchTerms) {
-    const { term } = searchTerm;
+    const { term, _id: searchId } = searchTerm;
     console.log(`[cron] scraping ${term}`);
     while (true) {
       console.log(`[cron] page ${page}`);
@@ -72,7 +72,7 @@ async function onScrape() {
       }
 
       if (successfulCarInfos.length > 0 || existingCars.length < 1) {
-        const newCars = successfulCarInfos.map(info => new TrackedCar({ carId: info.id, name: info.name, data: JSON.stringify(info), tag: term }));
+        const newCars = successfulCarInfos.map(info => new TrackedCar({ carId: info.id, name: info.name, data: JSON.stringify(info), searchId }));
         const results = await TrackedCar.insertMany(newCars);
         console.log(`[cron] inserted ${results.length} new cars`);
       }
