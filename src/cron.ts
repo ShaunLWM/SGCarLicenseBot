@@ -39,7 +39,7 @@ async function onScrape() {
       console.log(`[cron] scraped ${carIds.length} cars`);
 
       const [carInfos, existingCars] = await Promise.all([
-        Promise.allSettled(carIds.map(id => client.getCarInfo(id))),
+        Promise.allSettled(carIds.map(id => client.getCarInfo(id, true))),
         TrackedCar.find({ carId: { $in: carIds } }).select(["carId", "data"]).exec(),
       ]);
 
