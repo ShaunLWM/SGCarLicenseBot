@@ -62,12 +62,10 @@ async function onScrape() {
         }
 
         console.log(`[cron] ${existingCar.carId} - changes detected`);
+        new CarHistory({ carId: existingCar.carId, from: existingCar.data, to: JSON.stringify(carInfo), lastUpdated: new Date() }).save()
+        // have to separate the top and bottom
         existingCar.data = JSON.stringify(carInfo);
-        await Promise.allSettled([
-          new CarHistory({ carId: existingCar.carId, from: existingCar.data, to: JSON.stringify(carInfo), lastUpdated: new Date() }).save(),
-          existingCar.save()
-        ]);
-
+        existingCar.save()
         successfulCarInfos.splice(carIndex, 1);
       }
 
