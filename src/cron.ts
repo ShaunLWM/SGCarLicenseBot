@@ -62,6 +62,7 @@ async function onScrape() {
         }
 
         console.log(`[cron] ${existingCar.carId} - changes detected`);
+        console.log(diff);
         await new CarHistory({ carId: existingCar.carId, from: existingCar.data, to: JSON.stringify(carInfo), lastUpdated: new Date() }).save()
         // have to separate the top and bottom
         existingCar.data = JSON.stringify(carInfo);
