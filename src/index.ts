@@ -13,6 +13,8 @@ import puppeteer, { TimeoutError } from "puppeteer";
 import { cleanText, cleanupCache, createDirectory, TEMPORARY_CACHE_DIRECTORY, wait } from "./lib/Helper";
 import Car from "./models/Car";
 
+const USER_CONVERSATION: Record<number, { text: string, messageId: number }> = {}
+
 dayjs.extend(RelativeTime);
 
 if (!fs.existsSync(TEMPORARY_CACHE_DIRECTORY)) {
@@ -55,8 +57,13 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
       }
     };
 
+    if (USER_CONVERSATION[msg.chatId]) {
+      await bot.deleteMessage(msg.chatId, `${USER_CONVERSATION[msg.chatId].messageId}`);
+      delete USER_CONVERSATION[msg.chatId];
+    }
+
     return bot.sendMessage(msg.chatId,
-      `Model: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}${result.lastUpdated ? `\nLast Updated: ${result.lastUpdated}` : ''}`,
+      `${result.license}\nModel: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}${result.lastUpdated ? `\nLast Updated: ${result.lastUpdated}` : ''}`,
       result.lastUpdated ? opts : undefined);
   }
 
@@ -78,8 +85,18 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
     }
   }
 
-  async function sendUserMsg(str: string) {
-    await bot.sendMessage(msg.chatId, str);
+  async function sendUserMsg(str: string, isEdit = false) {
+    if (isEdit && USER_CONVERSATION[msg.chatId]) {
+      return bot.editMessageText(`${USER_CONVERSATION[msg.chatId].text}\n\n${str}`, { chat_id: msg.chatId, message_id: USER_CONVERSATION[msg.chatId].messageId });
+    }
+
+    const results = await bot.sendMessage(msg.chatId, str);
+    if (results) {
+      USER_CONVERSATION[msg.chatId] = {
+        text: str,
+        messageId: results.message_id,
+      };
+    }
   }
 
   function debugLog(str: string) {
@@ -152,7 +169,7 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
     }
 
     debugLog("Captcha found. Submitting...");
-    await sendUserMsg('Trying to solve Catcha, please hold on as it might take up to 10s...');
+    await sendUserMsg('Trying to solve Catcha, please hold on as it might take up to 10s...', true);
     const result = await solver.imageCaptcha(fs.readFileSync(USER_SCREENSHOT, "base64"));
     debugLog(`Got Captcha result: ${JSON.stringify(result)}`);
     await page.type('#main-content > div.dt-container > div:nth-child(2) > form > div.form-group.clearfix > div > div > input.form-control', result.data, { delay: 100 });
