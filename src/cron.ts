@@ -56,7 +56,9 @@ async function onScrape() {
         const carInfo = successfulCarInfos[carIndex];
         // check the diff and check if the diff has keys
         const diff = detailedDiff(JSON.parse(existingCar.data), carInfo) as DiffObject;
-        if (Object.keys(diff["added"]).length < 1 && Object.keys(diff["deleted"]).length < 1 && Object.keys(diff["updated"]).length < 1) {
+        const updatedKeys = Object.keys(diff["updated"]);
+        const isOnlyDepreciationChanges = updatedKeys.length === 1 && updatedKeys[0] === "depreciation";
+        if (Object.keys(diff["added"]).length < 1 && Object.keys(diff["deleted"]).length < 1 && (updatedKeys.length < 1 || isOnlyDepreciationChanges)) {
           successfulCarInfos.splice(carIndex, 1);
           continue;
         }
