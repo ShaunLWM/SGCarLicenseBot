@@ -75,17 +75,18 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
 
   await bot.sendChatAction(msg.chatId, 'typing');
   const result = await startCarSearch(msg, isForceResearch);
+
+  if (USER_CONVERSATION[msg.chatId]) {
+    await bot.deleteMessage(msg.chatId, `${USER_CONVERSATION[msg.chatId].messageId}`);
+    delete USER_CONVERSATION[msg.chatId];
+  }
+
   if (result.success) {
     const opts: TelegramBot.SendMessageOptions = {
       reply_markup: {
         inline_keyboard: [[{ text: 'Force Update', callback_data: result.license }]]
       }
     };
-
-    if (USER_CONVERSATION[msg.chatId]) {
-      await bot.deleteMessage(msg.chatId, `${USER_CONVERSATION[msg.chatId].messageId}`);
-      delete USER_CONVERSATION[msg.chatId];
-    }
 
     bot.sendMessage(msg.chatId,
       `${result.license}\nModel: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}${result.lastUpdated ? `\nLast Updated: ${result.lastUpdated}` : ''}`,
@@ -107,7 +108,7 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
   }
 
   if (result.message) {
-    return bot.sendMessage(msg.chatId, `Error ${result.message}`);
+    return bot.sendMessage(msg.chatId, `${result.license ? `Search: ${result.license}\n` : ''}Error: ${result.message}`);
   }
 };
 
@@ -151,6 +152,19 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
         throw new Error('Timeout. Try again later');
       }
       throw e;
+    }
+  }
+
+  async function getElementText(selector: string) {
+    try {
+      const node = await page.$(selector);
+      if (!node) {
+        return false;
+      }
+
+      return await node.evaluate(el => el.textContent)
+    } catch (error) {
+      return false;
     }
   }
 
@@ -219,16 +233,15 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
     debugLog("Submitting form..");
     await page.waitForNavigation({ waitUntil: 'networkidle2' });
 
-    const element = await waitForElement('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-container > div.dt-payment-dtls > div > div.col-xs-5.separated > div:nth-child(2) > p');
-    if (!element) {
+    const [carMake, notFound] = await Promise.allSettled([getElementText('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-container > div.dt-payment-dtls > div > div.col-xs-5.separated > div:nth-child(2) > p'), getElementText('#backend-error > table > tbody > tr > td > p')]);
+    if ((notFound.status === "fulfilled" && notFound.value === "Please note the following:") || carMake.status === "rejected" || (carMake.status === "fulfilled" && !carMake.value)) {
       debugLog("No car make found");
       throw new Error('No results for car license plate');
     }
 
     const response: ResultSuccess = { success: true, license: licensePlate, carMake: '' };
 
-    const carMake = await element.evaluate(el => el.textContent);
-    response['carMake'] = cleanText(carMake || '');
+    response['carMake'] = cleanText(carMake.value || '');
 
     const roadTaxExpiryElement = await waitForElement("#main-content > div.dt-container > div:nth-child(2) > form > div.dt-container > div.dt-detail-content.dt-usg-dt-wrpr > div > div > p.vrlDT-content-p");
     if (roadTaxExpiryElement) {
@@ -246,7 +259,7 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
     console.error(error);
     let message = 'Unknown Error'
     if (error instanceof Error) message = error.message
-    return { success: false, message };
+    return { success: false, message, license: licensePlate };
   } finally {
     cleanupCache(USER_SCREENSHOT);
   }

@@ -10,6 +10,7 @@ interface ResultSuccess {
 interface ResultFailed {
   success: false;
   message?: string;
+  license?: string;
 }
 
 type ScrapeResult = ResultSuccess | ResultFailed;
