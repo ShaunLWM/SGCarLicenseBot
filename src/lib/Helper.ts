@@ -11,7 +11,7 @@ export function createDirectory(path: string) {
 }
 
 export function cleanText(str: string) {
-    return str.replace(/\s\s+/g, ' ');
+    return str.replace(/\s\s+/g, ' ').trim();
 }
 
 export function cleanupCache(path: string) {
