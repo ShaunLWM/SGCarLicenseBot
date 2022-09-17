@@ -1,3 +1,4 @@
+declare module 'google-search-results-nodejs';
 interface ResultSuccess {
   success: true;
   license: string;
