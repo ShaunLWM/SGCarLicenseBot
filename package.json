@@ -6,19 +6,24 @@
   "author": "ShaunLWM <shaunlimweimin@gmail.com>",
   "license": "MIT",
   "devDependencies": {
+    "@types/cors": "^2.8.12",
+    "@types/express": "^4.17.13",
     "@types/node-telegram-bot-api": "^0.57.1",
     "typescript": "^4.7.4"
   },
   "dependencies": {
     "2captcha": "^3.0.4",
+    "cors": "^2.8.5",
     "dayjs": "^1.11.4",
     "deep-object-diff": "^1.1.7",
     "dotenv": "^16.0.1",
+    "express": "^4.18.1",
+    "google-search-results-nodejs": "^2.1.0",
     "jimp": "^0.16.1",
     "mongoose": "^6.5.0",
     "node-telegram-bot-api": "^0.58.0",
     "puppeteer": "^15.3.2",
-    "sgcarmart.js": "^0.0.1-alpha.14"
+    "sgcarmart.js": "^0.0.1-alpha.16"
   },
   "scripts": {
     "start": "node dist/index.js",

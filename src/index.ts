@@ -5,6 +5,7 @@ import * as Captcha from "2captcha";
 import dayjs from "dayjs";
 import RelativeTime from "dayjs/plugin/relativeTime";
 import fs from "fs";
+import SerpApi from "google-search-results-nodejs";
 import Jimp from "jimp";
 import mongoose from "mongoose";
 import TelegramBot from "node-telegram-bot-api";
@@ -12,6 +13,7 @@ import puppeteer, { TimeoutError } from "puppeteer";
 
 import { cleanText, cleanupCache, createDirectory, TEMPORARY_CACHE_DIRECTORY, wait } from "./lib/Helper";
 import Car from "./models/Car";
+import CarImage from "./models/CarImage";
 
 const USER_CONVERSATION: Record<number, { text: string, messageId: number }> = {}
 
@@ -21,14 +23,37 @@ if (!fs.existsSync(TEMPORARY_CACHE_DIRECTORY)) {
   fs.mkdirSync(TEMPORARY_CACHE_DIRECTORY);
 }
 
-const COMPULSORY_ENV = ['TELEGRAM_TOKEN', 'CAPTCHA_KEY'];
+const COMPULSORY_ENV = ['TELEGRAM_TOKEN', 'CAPTCHA_KEY', 'SERPAPI_KEY', 'MONGO_DB'];
 if (COMPULSORY_ENV.some(env => !process.env[env])) {
   console.error('Missing environment variables');
   process.exit(1);
 }
 
+const search = new SerpApi.GoogleSearch(process.env.SERPAPI_KEY);
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN as string, { polling: true });
 const solver = new Captcha.Solver(process.env.CAPTCHA_KEY as string);
+
+const searchImage = async (name: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const params = {
+      engine: "google",
+      q: name,
+      location: "Singapore",
+      google_domain: "google.com.sg",
+      gl: "sg",
+      hl: "en",
+      tbm: "isch"
+    };
+
+    search.json(params, (data: any) => {
+      if (data["images_results"]) {
+        return resolve(data["images_results"]?.[0]?.["thumbnail"]);
+      }
+
+      return reject(false);
+    });
+  });
+}
 
 bot.on('message', async (msg) => {
   handleMesage(msg);
@@ -62,9 +87,23 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
       delete USER_CONVERSATION[msg.chatId];
     }
 
-    return bot.sendMessage(msg.chatId,
+    bot.sendMessage(msg.chatId,
       `${result.license}\nModel: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}${result.lastUpdated ? `\nLast Updated: ${result.lastUpdated}` : ''}`,
       result.lastUpdated ? opts : undefined);
+
+    try {
+      const existingImage = await CarImage.findOne({ name: result.carMake }).exec();
+      if (!existingImage) {
+        const image = await searchImage(result.carMake);
+        await Promise.allSettled([bot.sendPhoto(msg.chatId, image), CarImage.create({ name: result.carMake, url: image })]);
+      } else {
+        await bot.sendPhoto(msg.chatId, existingImage.url);
+      }
+    } catch (error) {
+      // we don't have to care if it throws
+    }
+
+    return;
   }
 
   if (result.message) {
