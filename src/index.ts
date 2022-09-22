@@ -11,7 +11,7 @@ import mongoose from "mongoose";
 import TelegramBot from "node-telegram-bot-api";
 import puppeteer, { TimeoutError } from "puppeteer";
 
-import { cleanText, cleanupCache, createDirectory, TEMPORARY_CACHE_DIRECTORY, wait } from "./lib/Helper";
+import { CAR_BRANDS, cleanText, cleanupCache, createDirectory, TEMPORARY_CACHE_DIRECTORY, wait } from "./lib/Helper";
 import Car from "./models/Car";
 import CarImage from "./models/CarImage";
 
@@ -82,15 +82,17 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
   }
 
   if (result.success) {
-    const opts: TelegramBot.SendMessageOptions = {
-      reply_markup: {
-        inline_keyboard: [[{ text: 'Force Update', callback_data: result.license }]]
-      }
-    };
+    if (result.type !== 'image') {
+      const opts: TelegramBot.SendMessageOptions = {
+        reply_markup: {
+          inline_keyboard: [[{ text: 'Force Update', callback_data: result.license }]]
+        }
+      };
 
-    bot.sendMessage(msg.chatId,
-      `${result.license}\nModel: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}${result.lastUpdated ? `\nLast Updated: ${result.lastUpdated}` : ''}`,
-      result.lastUpdated ? opts : undefined);
+      bot.sendMessage(msg.chatId,
+        `${result.license}\nModel: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}${result.lastUpdated ? `\nLast Updated: ${result.lastUpdated}` : ''}`,
+        result.lastUpdated ? opts : undefined);
+    }
 
     try {
       const existingImage = await CarImage.findOne({ name: result.carMake }).exec();
@@ -174,7 +176,22 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
 
   const licensePlate = msg.text.trim().toUpperCase();
   if (!/^[A-Z]{1,3}\d{1,4}[A-Z]$/.test(licensePlate)) {
-    return { success: false, message: 'Please enter a valid car license plate' };
+
+    let carSearch = { key: '', value: '' };
+    for (const [key, value] of Object.entries(CAR_BRANDS)) {
+      if (licensePlate.toLowerCase().startsWith(key)) {
+        carSearch.key = key;
+        carSearch.value = value;
+        break;
+      }
+    }
+
+    if (Object.keys(carSearch).length === 0) {
+      return { success: false, message: 'Please enter a valid car license plate' };
+    }
+
+    const editedCarSearch = licensePlate.toLowerCase().replace(carSearch.key, carSearch.value).trim();
+    return { success: true, type: "image", license: "", carMake: editedCarSearch };
   }
 
   if (!isForceResearch) {

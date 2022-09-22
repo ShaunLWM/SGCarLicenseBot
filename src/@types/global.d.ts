@@ -5,6 +5,7 @@ interface ResultSuccess {
   carMake: string;
   roadTaxExpiry?: string;
   lastUpdated?: string;
+  type?: "image"
 }
 
 interface ResultFailed {
