@@ -109,6 +109,9 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
       }
     } catch (error) {
       // we don't have to care if it throws
+      if (result.type === 'image') {
+        return bot.sendMessage(msg.chatId, `No image found for: ${msg.text}`);
+      }
     }
 
     return;
