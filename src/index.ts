@@ -47,7 +47,7 @@ const searchImage = async (name: string): Promise<string> => {
 
     search.json(params, (data: any) => {
       if (data["images_results"]) {
-        return resolve(data["images_results"]?.[0]?.["thumbnail"]);
+        return resolve(data["images_results"]);
       }
 
       return reject(false);
@@ -97,8 +97,13 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
     try {
       const existingImage = await CarImage.findOne({ name: result.carMake }).exec();
       if (!existingImage) {
-        const image = await searchImage(result.carMake);
-        await Promise.allSettled([bot.sendPhoto(msg.chatId, image), CarImage.create({ name: result.carMake, url: image })]);
+        const images = await searchImage(result.carMake) as any;
+        const image = images?.[0]?.["thumbnail"];
+        if (!image) {
+          return bot.sendMessage(msg.chatId, `No image found for: ${msg.text}`);
+        }
+
+        await Promise.allSettled([bot.sendPhoto(msg.chatId, image), CarImage.create({ name: result.carMake, url: image, raw: JSON.stringify(images) })]);
       } else {
         await bot.sendPhoto(msg.chatId, existingImage.url);
       }
