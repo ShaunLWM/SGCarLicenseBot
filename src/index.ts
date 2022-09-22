@@ -103,7 +103,7 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
           return bot.sendMessage(msg.chatId, `No image found for: ${msg.text}`);
         }
 
-        await Promise.allSettled([bot.sendPhoto(msg.chatId, image), CarImage.create({ name: result.carMake, url: image, raw: JSON.stringify(images) })]);
+        await Promise.allSettled([bot.sendPhoto(msg.chatId, image), CarImage.create({ name: result.carMake, url: image, raw: JSON.stringify(images.map(p => p.thumbnail)) })]);
       } else {
         await bot.sendPhoto(msg.chatId, existingImage.url);
       }
