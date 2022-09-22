@@ -11,7 +11,7 @@ import mongoose from "mongoose";
 import TelegramBot from "node-telegram-bot-api";
 import puppeteer, { TimeoutError } from "puppeteer";
 
-import { CAR_BRANDS, cleanText, cleanupCache, createDirectory, TEMPORARY_CACHE_DIRECTORY, wait } from "./lib/Helper";
+import { CAR_BRANDS, cleanText, cleanupCache, createDirectory, SERPAPI_IMAGE_PREFIX, TEMPORARY_CACHE_DIRECTORY, wait } from "./lib/Helper";
 import Car from "./models/Car";
 import CarImage from "./models/CarImage";
 
@@ -103,9 +103,9 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
           return bot.sendMessage(msg.chatId, `No image found for: ${msg.text}`);
         }
 
-        await Promise.allSettled([bot.sendPhoto(msg.chatId, image), CarImage.create({ name: result.carMake, url: image, raw: JSON.stringify(images.map(p => p.thumbnail)) })]);
+        await Promise.allSettled([bot.sendPhoto(msg.chatId, image), CarImage.create({ name: result.carMake, url: image.replace(SERPAPI_IMAGE_PREFIX, ''), raw: JSON.stringify(images.map(p => p.thumbnail.replace(SERPAPI_IMAGE_PREFIX, ''))) })]);
       } else {
-        await bot.sendPhoto(msg.chatId, existingImage.url);
+        await bot.sendPhoto(msg.chatId, `${SERPAPI_IMAGE_PREFIX}${existingImage.url}`);
       }
     } catch (error) {
       // we don't have to care if it throws

@@ -1,5 +1,7 @@
 import fs from "fs";
 
+export const SERPAPI_IMAGE_PREFIX = 'https://serpapi.com/searches/';
+
 export const TEMPORARY_CACHE_DIRECTORY = './.cache';
 
 export async function wait(ms = 1000) {
