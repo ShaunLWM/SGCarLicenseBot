@@ -33,7 +33,7 @@ const search = new SerpApi.GoogleSearch(process.env.SERPAPI_KEY);
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN as string, { polling: true });
 const solver = new Captcha.Solver(process.env.CAPTCHA_KEY as string);
 
-const searchImage = async (name: string): Promise<string> => {
+const searchImage = async (name: string): Promise<ImagesResult[]> => {
   return new Promise((resolve, reject) => {
     const params = {
       engine: "google",
@@ -45,7 +45,7 @@ const searchImage = async (name: string): Promise<string> => {
       tbm: "isch"
     };
 
-    search.json(params, (data: any) => {
+    search.json(params, (data: SerpApiResult) => {
       if (data["images_results"]) {
         return resolve(data["images_results"]);
       }
@@ -97,8 +97,8 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
     try {
       const existingImage = await CarImage.findOne({ name: result.carMake }).exec();
       if (!existingImage) {
-        const images = await searchImage(result.carMake) as any;
-        const image = images?.[0]?.["thumbnail"];
+        const images = await searchImage(result.carMake);
+        const image = images?.[0]?.thumbnail;
         if (!image) {
           return bot.sendMessage(msg.chatId, `No image found for: ${msg.text}`);
         }
