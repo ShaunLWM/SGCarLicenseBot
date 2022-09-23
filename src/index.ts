@@ -103,9 +103,21 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
           return bot.sendMessage(msg.chatId, `No image found for: ${msg.text}`);
         }
 
-        await Promise.allSettled([bot.sendPhoto(msg.chatId, image), CarImage.create({ name: result.carMake, url: image.replace(SERPAPI_IMAGE_PREFIX, ''), raw: JSON.stringify(images.map(p => p.thumbnail.replace(SERPAPI_IMAGE_PREFIX, ''))) })]);
+        await Promise.allSettled([
+          bot.sendPhoto(msg.chatId, image),
+          CarImage.create({
+            name: result.carMake,
+            raw: JSON.stringify(images.map(p => {
+              return {
+                low: p.thumbnail.replace(SERPAPI_IMAGE_PREFIX, ''),
+                hd: p.original,
+              }
+            }))
+          })
+        ]);
       } else {
-        await bot.sendPhoto(msg.chatId, `${SERPAPI_IMAGE_PREFIX}${existingImage.url}`);
+        const raw = JSON.parse(existingImage.raw) as { low: string, hd: string }[];
+        await bot.sendPhoto(msg.chatId, `${SERPAPI_IMAGE_PREFIX}${raw[0].low}`);
       }
     } catch (error) {
       // we don't have to care if it throws
