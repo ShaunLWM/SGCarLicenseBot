@@ -5,7 +5,7 @@ interface ResultSuccess {
   carMake: string;
   roadTaxExpiry?: string;
   lastUpdated?: string;
-  type?: "image"
+  type: "search";
 }
 
 interface ResultFailed {
@@ -14,7 +14,16 @@ interface ResultFailed {
   license?: string;
 }
 
-type ScrapeResult = ResultSuccess | ResultFailed;
+interface ResultImageSearch {
+  success: true;
+  type: "image";
+  isAnother: boolean;
+  isHd: boolean;
+  carMake: string;
+  carIndex: number;
+}
+
+type ScrapeResult = ResultSuccess | ResultFailed | ResultImageSearch;
 
 
 /* SerpApi */

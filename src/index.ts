@@ -11,7 +11,7 @@ import mongoose from "mongoose";
 import TelegramBot from "node-telegram-bot-api";
 import puppeteer, { TimeoutError } from "puppeteer";
 
-import { CAR_BRANDS, cleanText, cleanupCache, createDirectory, SERPAPI_IMAGE_PREFIX, TEMPORARY_CACHE_DIRECTORY, wait } from "./lib/Helper";
+import { CAR_BRANDS, cleanText, cleanupCache, createDirectory, getRandomInt, SERPAPI_IMAGE_PREFIX, TEMPORARY_CACHE_DIRECTORY, wait } from "./lib/Helper";
 import Car from "./models/Car";
 import CarImage from "./models/CarImage";
 
@@ -82,7 +82,7 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
   }
 
   if (result.success) {
-    if (result.type !== 'image') {
+    if (result.type === 'search') {
       const opts: TelegramBot.SendMessageOptions = {
         reply_markup: {
           inline_keyboard: [[{ text: 'Force Update', callback_data: result.license }]]
@@ -103,11 +103,17 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
           return bot.sendMessage(msg.chatId, `No image found for: ${msg.text}`);
         }
 
+        const opts: TelegramBot.SendMessageOptions = {
+          reply_markup: {
+            inline_keyboard: [[{ text: 'Get Another', callback_data: `another_${encodeURIComponent(result.carMake)}_0` }, { text: 'Force HD', callback_data: `hd_${encodeURIComponent(result.carMake)}_0` }]]
+          }
+        };
+
         await Promise.allSettled([
-          bot.sendPhoto(msg.chatId, image),
+          bot.sendPhoto(msg.chatId, image, opts),
           CarImage.create({
             name: result.carMake,
-            raw: JSON.stringify(images.map(p => {
+            raw: JSON.stringify(images.filter(item => !item.thumbnail.startsWith('https://encrypted-tbn0.gstatic.com/images')).map(p => {
               return {
                 low: p.thumbnail.replace(SERPAPI_IMAGE_PREFIX, ''),
                 hd: p.original,
@@ -116,8 +122,39 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
           })
         ]);
       } else {
+        let url = '';
+        let newIndex = -1;
         const raw = JSON.parse(existingImage.raw) as { low: string, hd: string }[];
-        await bot.sendPhoto(msg.chatId, `${SERPAPI_IMAGE_PREFIX}${raw[0].low}`);
+        if (result.type === 'image') {
+          if (result.isAnother) {
+            newIndex = getRandomInt(0, raw.length - 1);
+            while (newIndex === result.carIndex) {
+              // TODO: escape after X tries
+              newIndex = getRandomInt(0, raw.length - 1);
+            }
+
+            url = `${SERPAPI_IMAGE_PREFIX}${raw[newIndex].low}`;
+          }
+
+          if (result.isHd) {
+            url = raw[result.carIndex]?.hd?.split(/[?#]/)[0];
+            newIndex = result.carIndex;
+          }
+        }
+
+        if (url && newIndex > -1) {
+          const keyboard = [{ text: 'Get Another', callback_data: `another_${encodeURIComponent(result.carMake)}_${newIndex}` }];
+          if ((result.type === "image" && !result.isHd) || result.type === 'search') {
+            keyboard.push({ text: 'Force HD', callback_data: `hd_${encodeURIComponent(result.carMake)}_${newIndex}` });
+          }
+
+          const opts: TelegramBot.SendMessageOptions = {
+            reply_markup: {
+              inline_keyboard: [keyboard]
+            }
+          };
+          await bot.sendPhoto(msg.chatId, url, opts);
+        }
       }
     } catch (error) {
       // we don't have to care if it throws
@@ -194,24 +231,37 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
     return { success: false, };
   }
 
-  const licensePlate = msg.text.trim().toUpperCase();
+  let licensePlate = msg.text.trim().toUpperCase();
+  let editedCarSearch;
+  let isAnother = false;
+  let isHd = false;
+  let carIndex = -1;
+
   if (!/^[A-Z]{1,3}\d{1,4}[A-Z]$/.test(licensePlate)) {
-
-    let carSearch = { key: '', value: '' };
-    for (const [key, value] of Object.entries(CAR_BRANDS)) {
-      if (licensePlate.toLowerCase().startsWith(key)) {
-        carSearch.key = key;
-        carSearch.value = value;
-        break;
+    if (licensePlate.startsWith('ANOTHER_') || licensePlate.startsWith('HD_')) {
+      isAnother = licensePlate.startsWith('ANOTHER_');
+      isHd = licensePlate.startsWith('HD_');
+      const split = licensePlate.split('_');
+      editedCarSearch = decodeURIComponent(split[1]);
+      carIndex = parseInt(split[2]);
+    } else {
+      let carSearch = { key: '', value: '' };
+      for (const [key, value] of Object.entries(CAR_BRANDS)) {
+        if (licensePlate.toLowerCase().startsWith(key)) {
+          carSearch.key = key;
+          carSearch.value = value;
+          break;
+        }
       }
+
+      if (!carSearch.key) {
+        return { success: false, message: 'Please enter a valid car license plate or a car build' };
+      }
+
+      editedCarSearch = licensePlate.toLowerCase().replace(carSearch.key, carSearch.value).trim();
     }
 
-    if (!carSearch.key) {
-      return { success: false, message: 'Please enter a valid car license plate or a car build' };
-    }
-
-    const editedCarSearch = licensePlate.toLowerCase().replace(carSearch.key, carSearch.value).trim();
-    return { success: true, type: "image", license: "", carMake: editedCarSearch };
+    return { success: true, type: "image", carMake: editedCarSearch, isAnother, isHd, carIndex };
   }
 
   if (!isForceResearch) {
@@ -223,6 +273,7 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
         carMake: existingCar.carMake,
         roadTaxExpiry: existingCar.tax,
         lastUpdated: dayjs(existingCar.lastUpdated).fromNow(),
+        type: "search",
       };
       return response;
     }
@@ -276,7 +327,7 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
       throw new Error('No results for car license plate');
     }
 
-    const response: ResultSuccess = { success: true, license: licensePlate, carMake: '' };
+    const response: ResultSuccess = { success: true, license: licensePlate, carMake: '', type: "search" };
 
     response['carMake'] = cleanText(carMake.value || '');
 
