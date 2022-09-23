@@ -194,7 +194,7 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
       }
     }
 
-    if (Object.keys(carSearch).length === 0) {
+    if (!carSearch.key) {
       return { success: false, message: 'Please enter a valid car license plate' };
     }
 
