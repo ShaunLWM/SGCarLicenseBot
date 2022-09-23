@@ -195,7 +195,7 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
     }
 
     if (!carSearch.key) {
-      return { success: false, message: 'Please enter a valid car license plate' };
+      return { success: false, message: 'Please enter a valid car license plate or a car build' };
     }
 
     const editedCarSearch = licensePlate.toLowerCase().replace(carSearch.key, carSearch.value).trim();
