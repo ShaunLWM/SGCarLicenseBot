@@ -126,7 +126,7 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
         let newIndex = -1;
         const raw = JSON.parse(existingImage.raw) as { low: string, hd: string }[];
         if (result.type === 'image') {
-          if (result.isAnother) {
+          if (result.isAnother || result.carIndex < 0) {
             newIndex = getRandomInt(0, raw.length - 1);
             while (newIndex === result.carIndex) {
               // TODO: escape after X tries
