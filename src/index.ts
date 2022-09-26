@@ -122,9 +122,15 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
           })
         ]);
       } else {
+        console.log(result);
         let url = '';
         let newIndex = -1;
         const raw = JSON.parse(existingImage.raw) as { low: string, hd: string }[];
+        if (result.type === "search") {
+          url = raw[0].low;
+          newIndex = 0;
+        }
+
         if (result.type === 'image') {
           if (result.isAnother || result.carIndex < 0) {
             newIndex = getRandomInt(0, raw.length - 1);
@@ -142,6 +148,7 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
           }
         }
 
+        console.log(newIndex, url);
         if (url && newIndex > -1) {
           const keyboard = [{ text: 'Get Another', callback_data: `another_${encodeURIComponent(result.carMake)}_${newIndex}` }];
           if ((result.type === "image" && !result.isHd) || result.type === 'search') {
