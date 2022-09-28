@@ -2,6 +2,8 @@ import { Document, Model, model, Schema } from "mongoose";
 
 export interface ISearchTerm {
   term: string;
+  registrationDate: string;
+  itemsPerPage: number;
 }
 
 const ISearchTermSchemaFields: Record<keyof ISearchTerm, any> = {
@@ -9,6 +11,14 @@ const ISearchTermSchemaFields: Record<keyof ISearchTerm, any> = {
     type: String,
     required: true,
   },
+  registrationDate: {
+    type: String,
+    default: "0",
+  },
+  itemsPerPage: {
+    type: Number,
+    default: 20,
+  }
 };
 
 const ISearchTermSchema = new Schema<ISearchTermDocument, ISearchTermModel>(ISearchTermSchemaFields);

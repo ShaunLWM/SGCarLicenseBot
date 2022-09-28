@@ -25,11 +25,11 @@ async function onScrape() {
   }
 
   for (const searchTerm of searchTerms) {
-    const { term, _id: searchId } = searchTerm;
+    const { term, _id: searchId, registrationDate = 0, itemsPerPage = 20 } = searchTerm;
     console.log(`[cron] scraping ${term}`);
     while (true) {
       console.log(`[cron] page ${page}`);
-      const results = await client.getLatestUsed({ search: term, page });
+      const results = await client.getLatestUsed({ search: term, page, registrationDate, count: itemsPerPage });
       if (results.length < 1) {
         console.log(`[cron] no results found on page ${page}`);
         break;
