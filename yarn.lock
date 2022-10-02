@@ -2055,10 +2055,10 @@ setprototypeof@1.2.0:
   resolved "https://registry.yarnpkg.com/setprototypeof/-/setprototypeof-1.2.0.tgz#66c9a24a73f9fc28cbe66b09fed3d33dcaf1b424"
   integrity sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==
 
-sgcarmart.js@^0.0.1-alpha.16:
-  version "0.0.1-alpha.16"
-  resolved "https://registry.yarnpkg.com/sgcarmart.js/-/sgcarmart.js-0.0.1-alpha.16.tgz#dcdf125f59587c93f9f241a98937ff34cc2b123b"
-  integrity sha512-jaFOCdUTDc3TKaor1j0bHI28FCaLXRVRMtfyTBH7qlYHNVHair6TpP36WHDbkFJRTJ31oxTtA/7gL3VYiDRNYg==
+sgcarmart.js@^0.0.1-alpha.17:
+  version "0.0.1-alpha.17"
+  resolved "https://registry.yarnpkg.com/sgcarmart.js/-/sgcarmart.js-0.0.1-alpha.17.tgz#f2e602b406f82d63f86fc0f52e892216bb5ddf48"
+  integrity sha512-ArR+BmDwAXSYGn+YA3saWudsthCsDHAuGLf0RCD2Y9PzjwJoVv6fD1FMJHEVB5q4TWzgAT1Cavne1AUYOdnHhw==
   dependencies:
     camelcase "^6.3.0"
     cheerio "^1.0.0-rc.12"
