@@ -292,15 +292,20 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
   const page = await browser.newPage();
   await page.goto('https://vrl.lta.gov.sg/lta/vrl/action/pubfunc2?ID=EnquireRoadTaxExpDtProxy', { waitUntil: 'networkidle2' });
   const selector = '#main-content > div.dt-container > div:nth-child(2) > form > div.form-group.clearfix > div > iframe';
-  await page.waitForTimeout(1250);
-  await page.waitForSelector(selector);
-  const captchaElement = await page.$(selector);
-  if (!captchaElement) {
+  try {
+    await page.waitForTimeout(1250);
+    await page.waitForSelector(selector);
+  } catch (error) {
     debugLog("No Captcha found");
-    throw new Error('No Captcha found');
+    throw new Error('Seemed like something went wrong with captcha. Try again later');
   }
 
   const USER_SCREENSHOT = createDirectory(`screenshot_${msg.chatId}.png`);
+  const captchaElement = await page.$(selector);
+  if (!captchaElement) {
+    throw new Error('Seemed like something went wrong with captcha. Try again later');
+  }
+
   await captchaElement.screenshot({ path: USER_SCREENSHOT });
 
   try {
@@ -323,10 +328,12 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
     await page.type('#main-content > div.dt-container > div:nth-child(2) > form > div.form-group.clearfix > div > div > input.form-control', result.data, { delay: 100 });
     await page.type('#vehNoField', licensePlate);
     await page.click('#agreeTCbox');
-    await page.click('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-btn-group > button');
-
     debugLog("Submitting form..");
-    await page.waitForNavigation({ waitUntil: 'networkidle2' });
+    await Promise.all([
+      page.click('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-btn-group > button'),
+      page.waitForNavigation({ waitUntil: 'networkidle2' })
+    ]);
+
 
     const [carMake, notFound] = await Promise.allSettled([getElementText('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-container > div.dt-payment-dtls > div > div.col-xs-5.separated > div:nth-child(2) > p'), getElementText('#backend-error > table > tbody > tr > td > p')]);
     if ((notFound.status === "fulfilled" && notFound.value === "Please note the following:") || carMake.status === "rejected" || (carMake.status === "fulfilled" && !carMake.value)) {
