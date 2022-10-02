@@ -127,7 +127,7 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
         let newIndex = -1;
         const raw = JSON.parse(existingImage.raw) as { low: string, hd: string }[];
         if (result.type === "search") {
-          url = raw[0].low;
+          url = `${SERPAPI_IMAGE_PREFIX}${raw[0].low}`;
           newIndex = 0;
         }
 
