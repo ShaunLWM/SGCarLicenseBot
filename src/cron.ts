@@ -14,8 +14,16 @@ interface DiffObject {
 }
 
 const client = new SGCarMart();
+let timerId;
 
 async function onScrape() {
+  const currentTime = new Date().getTime();
+  timerId = setInterval(() => {
+    if (new Date().getTime() > (currentTime + 1000 * 60 * 5)) {
+      // if script takes longer than 5 minutes to run, exit
+      throw new Error('Script taken too long. Exiting..');
+    }
+  }, 1000 * 30); // check every 30 seconds
   let page = 1;
 
   const searchTerms = await SearchTerm.find();
@@ -26,7 +34,7 @@ async function onScrape() {
 
   for (const searchTerm of searchTerms) {
     const { term, _id: searchId, registrationDate = 0, itemsPerPage = 20 } = searchTerm;
-    console.log(`[cron] scraping ${term}`);
+    console.log(`----------------\n[cron] scraping ${term}\n----------------\n`);
     page = 1;
     while (true) {
       console.log(`[cron] page ${page}`);
@@ -101,5 +109,9 @@ try {
 } catch (error) {
   console.log(error);
 } finally {
+  if (timerId) {
+    clearInterval(timerId);
+  }
+
   process.exit(0);
 }
