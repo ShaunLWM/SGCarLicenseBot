@@ -34,7 +34,7 @@ async function onScrape() {
 
   for (const searchTerm of searchTerms) {
     const { term, _id: searchId, registrationDate = 0, itemsPerPage = 20 } = searchTerm;
-    console.log(`----------------\n[cron] scraping ${term}\n----------------\n`);
+    console.log(`--------------------------------\n[cron] scraping ${term}\n--------------------------------`);
     page = 1;
     while (true) {
       console.log(`[cron] page ${page}`);
@@ -67,7 +67,8 @@ async function onScrape() {
         const diff = detailedDiff(JSON.parse(existingCar.data), carInfo) as DiffObject;
         const updatedKeys = Object.keys(diff["updated"]);
         const isOnlyDepreciationChanges = updatedKeys.length === 1 && updatedKeys[0] === "depreciation";
-        if (Object.keys(diff["added"]).length < 1 && Object.keys(diff["deleted"]).length < 1 && (updatedKeys.length < 1 || isOnlyDepreciationChanges)) {
+        const isOnlyUpdatedOnChanges = updatedKeys.length === 1 && updatedKeys[0] === "updatedOn";
+        if (Object.keys(diff["added"]).length < 1 && Object.keys(diff["deleted"]).length < 1 && (updatedKeys.length < 1 || isOnlyDepreciationChanges || isOnlyUpdatedOnChanges)) {
           successfulCarInfos.splice(carIndex, 1);
           continue;
         }
@@ -103,15 +104,17 @@ async function setup() {
   console.log("[db] connected..");
 }
 
-try {
-  setup();
-  onScrape();
-} catch (error) {
-  console.log(error);
-} finally {
-  if (timerId) {
-    clearInterval(timerId);
-  }
+(async () => {
+  try {
+    await setup();
+    await onScrape();
+  } catch (error) {
+    console.log(error);
+  } finally {
+    if (timerId) {
+      clearInterval(timerId);
+    }
 
-  process.exit(0);
-}
+    process.exit(0);
+  }
+})();
