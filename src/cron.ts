@@ -88,8 +88,6 @@ async function onScrape() {
       console.log(`------------------`);
     }
   }
-
-  process.exit(0);
 }
 
 async function setup() {
@@ -102,4 +100,6 @@ try {
   onScrape();
 } catch (error) {
   console.log(error);
+} finally {
+  process.exit(0);
 }
