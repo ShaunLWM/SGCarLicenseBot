@@ -238,7 +238,7 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
     return { success: false, };
   }
 
-  let licensePlate = msg.text.trim().toUpperCase();
+  const licensePlate = msg.text.trim().toUpperCase();
   let editedCarSearch;
   let isAnother = false;
   let isHd = false;
@@ -290,20 +290,22 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
   await sendUserMsg(`Searching for: ${licensePlate}`);
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
-  await page.goto('https://vrl.lta.gov.sg/lta/vrl/action/pubfunc2?ID=EnquireRoadTaxExpDtProxy', { waitUntil: 'networkidle2' });
+  await page.goto('https://vrl.lta.gov.sg/lta/vrl/action/pubfunc?ID=EnquireRoadTaxExpDtProxy', { waitUntil: 'networkidle2' });
   const selector = '#main-content > div.dt-container > div:nth-child(2) > form > div.form-group.clearfix > div > iframe';
   try {
     await page.waitForTimeout(1250);
     await page.waitForSelector(selector);
   } catch (error) {
     debugLog("No Captcha found");
-    throw new Error('Seemed like something went wrong with captcha. Try again later');
+    await page.screenshot({ path: `${licensePlate}-1.png`, fullPage: true });
+    return { success: false, message: '(1) No Recaptcha found. Please try again later' };
   }
 
   const USER_SCREENSHOT = createDirectory(`screenshot_${msg.chatId}.png`);
   const captchaElement = await page.$(selector);
   if (!captchaElement) {
-    throw new Error('Seemed like something went wrong with captcha. Try again later');
+    await page.screenshot({ path: `${licensePlate}-2.png`, fullPage: true });
+    return { success: false, message: '(2) No Recaptcha found. Please try again later' };
   }
 
   await captchaElement.screenshot({ path: USER_SCREENSHOT });
@@ -318,7 +320,7 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
         throw new Error('No captcha found');
       }
       await wait(1000);
-      existCounter += 1;
+      existCounter++;
     }
 
     debugLog("Captcha found. Submitting...");
