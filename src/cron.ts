@@ -24,7 +24,6 @@ async function onScrape() {
       throw new Error('Script taken too long. Exiting..');
     }
   }, 1000 * 30); // check every 30 seconds
-  let page = 1;
 
   const searchTerms = await SearchTerm.find();
   if (searchTerms.length < 1) {
@@ -33,12 +32,12 @@ async function onScrape() {
   }
 
   for (const searchTerm of searchTerms) {
-    const { term, _id: searchId, registrationDate = 0, itemsPerPage = 20 } = searchTerm;
+    const { term, _id: searchId, registrationDate = 0, itemsPerPage = 20, yearFrom, yearTo } = searchTerm;
     console.log(`--------------------------------\n[cron] scraping ${term}\n--------------------------------`);
-    page = 1;
+    let page = 1;
     while (true) {
       console.log(`[cron] page ${page}`);
-      const results = await client.getLatestUsed({ search: term, page, registrationDate, count: itemsPerPage });
+      const results = await client.getLatestUsed({ search: term, page, registrationDate, count: itemsPerPage, yearFrom, yearTo });
       if (results.length < 1) {
         console.log(`[cron] no results found on page ${page}`);
         break;

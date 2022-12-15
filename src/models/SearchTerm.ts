@@ -4,6 +4,8 @@ export interface ISearchTerm {
   term: string;
   registrationDate: string;
   itemsPerPage: number;
+  yearFrom: number;
+  yearTo: number;
 }
 
 const ISearchTermSchemaFields: Record<keyof ISearchTerm, any> = {
@@ -18,7 +20,15 @@ const ISearchTermSchemaFields: Record<keyof ISearchTerm, any> = {
   itemsPerPage: {
     type: Number,
     default: 20,
-  }
+  },
+  yearFrom: {
+    type: Number,
+    default: 0,
+  },
+  yearTo: {
+    type: Number,
+    default: 0,
+  },
 };
 
 const ISearchTermSchema = new Schema<ISearchTermDocument, ISearchTermModel>(ISearchTermSchemaFields);
