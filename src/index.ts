@@ -366,6 +366,11 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
     return { success: false, message, license: licensePlate };
   } finally {
     cleanupCache(USER_SCREENSHOT);
+    try {
+      await browser.close();
+    } catch (_e) {
+
+    }
   }
 }
 
