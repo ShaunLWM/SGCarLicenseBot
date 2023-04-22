@@ -2,7 +2,8 @@ import { Document, Model, model, Schema, Types } from "mongoose";
 
 export interface ICarImage {
   name: string;
-  raw: string;
+  hash: string;
+  names: string[];
 }
 
 const CarImageSchemaFields: Record<keyof ICarImage, any> = {
@@ -11,9 +12,13 @@ const CarImageSchemaFields: Record<keyof ICarImage, any> = {
     required: true,
     unique: true,
   },
-  raw: {
+  hash: {
     type: String,
-  }
+    index: true,
+  },
+  names: {
+    type: [String],
+  },
 };
 
 const ICarImageSchema = new Schema<ICarImageDocument, ICarImageModel>(CarImageSchemaFields);

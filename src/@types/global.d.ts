@@ -17,13 +17,18 @@ interface ResultFailed {
 interface ResultImageSearch {
   success: true;
   type: "image";
-  isAnother: boolean;
-  isHd: boolean;
   carMake: string;
-  carIndex: number;
 }
 
-type ScrapeResult = ResultSuccess | ResultFailed | ResultImageSearch;
+interface ResultImageAnother {
+  success: true;
+  type: "another";
+  isAnother: true;
+  hash: string; // note that this is the hash value
+  previousIndex: number;
+}
+
+type ScrapeResult = ResultSuccess | ResultFailed | ResultImageSearch | ResultImageAnother;
 
 
 /* SerpApi */

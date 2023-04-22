@@ -6,13 +6,15 @@ import dayjs from "dayjs";
 import RelativeTime from "dayjs/plugin/relativeTime";
 import type { queueAsPromised } from "fastq";
 import fastq from "fastq";
-import fs from "fs";
+import fs from "fs-extra";
 import Jimp from "jimp";
 import mongoose from "mongoose";
 import TelegramBot from "node-telegram-bot-api";
 import puppeteer from "puppeteer";
+import download from "download";
+import path from "path";
 
-import { cleanText, cleanupCache, createDirectory, findExistingCar, getRandomInt, hash, isNormalMessage, searchImage, SERPAPI_IMAGE_PREFIX, TEMPORARY_CACHE_DIRECTORY, UserConversation, validateCarLicense, wait } from "./lib/Helper";
+import { CAR_BRANDS, CAR_MEDIA_DIRECTORY, cleanText, cleanupCache, createDirectory, DownloadTask, extname, findExistingCar, getRandomInt, hash, isNormalMessage, searchImage, SERPAPI_IMAGE_PREFIX, TEMPORARY_CACHE_DIRECTORY, UserConversation, validateCarLicense, wait } from "./lib/Helper";
 import Car from "./models/Car";
 import CarImage from "./models/CarImage";
 
@@ -20,7 +22,7 @@ const USER_CONVERSATION: Record<number, Record<string, { text: string, messageId
 
 let currentQueueNumber = -1;
 
-const COMPULSORY_ENV = ['TELEGRAM_TOKEN', 'CAPTCHA_KEY', 'SERPAPI_KEY', 'MONGO_DB'];
+const COMPULSORY_ENV = ['TELEGRAM_TOKEN', 'CAPTCHA_KEY', 'SERPAPI_KEY', 'MONGO_DB', 'TELEGRAM_ADMIN_ID'];
 if (COMPULSORY_ENV.some(env => !process.env[env])) {
   console.error('Missing environment variables');
   process.exit(1);
@@ -28,13 +30,13 @@ if (COMPULSORY_ENV.some(env => !process.env[env])) {
 
 dayjs.extend(RelativeTime);
 
-if (!fs.existsSync(TEMPORARY_CACHE_DIRECTORY)) {
-  fs.mkdirSync(TEMPORARY_CACHE_DIRECTORY);
-}
+fs.ensureDirSync(CAR_MEDIA_DIRECTORY);
+fs.ensureDirSync(TEMPORARY_CACHE_DIRECTORY);
 
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN as string, { polling: true });
 const solver = new Captcha.Solver(process.env.CAPTCHA_KEY as string);
 const q: queueAsPromised<UserConversation> = fastq.promise(asyncWorker, 1);
+const DownloadQueue: queueAsPromised<DownloadTask> = fastq.promise(downloadWorker, 2);
 
 function debugLog(chatId: number, str: string) {
   console.log(`[${chatId}] ${str}`);
@@ -60,8 +62,39 @@ async function handleResult(chatId: number, result: ScrapeResult): Promise<void>
   }
 
   try {
-    const existingImage = await CarImage.findOne({ name: result.carMake }).exec();
-    if (!existingImage) {
+    const isAnotherImageSearch = result.type === "another";
+    const opts = isAnotherImageSearch ? { hash: result.hash } : { name: result.carMake };
+    const existingImage = await CarImage.findOne(opts).exec();
+    const makeHash = isAnotherImageSearch ? result.hash : hash(result.carMake);
+    const hasAtLeastOneImage = existingImage && existingImage.names.length > 0 && fs.existsSync(path.join(CAR_MEDIA_DIRECTORY, existingImage.names[0]));
+
+    if (isAnotherImageSearch) {
+      if (!hasAtLeastOneImage) {
+        return;
+      }
+
+      let currentFile = existingImage.names[0];
+      let newIndex = getRandomInt(0, existingImage.names.length - 1);
+      while (newIndex === result.previousIndex) {
+        // TODO: escape after X tries
+        newIndex = getRandomInt(0, existingImage.names.length - 1);
+      }
+
+      currentFile = path.join(CAR_MEDIA_DIRECTORY, existingImage.names[newIndex]);
+      const keyboard = [{ text: 'Get Another', callback_data: `another_${makeHash}_${newIndex}` }];
+      const opts: TelegramBot.SendMessageOptions = {
+        reply_markup: {
+          inline_keyboard: [keyboard]
+        }
+      };
+
+      await bot.sendPhoto(chatId, currentFile, opts);
+      return;
+    }
+
+    if (!hasAtLeastOneImage) {
+      // this applies to license plate search + normal query search
+      console.log(`[${makeHash}] No existing image found, searching for ${result.carMake}`);
       const images = await searchImage(result.carMake);
       console.log(images);
       const image = images?.[0]?.thumbnail;
@@ -71,67 +104,34 @@ async function handleResult(chatId: number, result: ScrapeResult): Promise<void>
 
       const opts: TelegramBot.SendMessageOptions = {
         reply_markup: {
-          inline_keyboard: [[{ text: 'Get Another', callback_data: `another_${encodeURIComponent(result.carMake)}_0` }, { text: 'Force HD', callback_data: `hd_${encodeURIComponent(result.carMake)}_0` }]]
+          inline_keyboard: [[{ text: 'Get Another', callback_data: `another_${makeHash}_0` }]]
         }
       };
 
+      const filterImages = images.filter(item => !item.thumbnail.startsWith('https://encrypted-tbn0.gstatic.com/images'));
+      if (filterImages.length < 1) {
+        return;
+      }
+
+      const imagesName = filterImages.slice(0, 5).map((p, i) => {
+        const name = `${makeHash}_${i}${extname(p.original) || "jpg"}`;
+        DownloadQueue.push({ url: p.original, name, })
+        return name;
+      });
+
       await Promise.allSettled([
-        bot.sendPhoto(chatId, image, opts),
-        CarImage.create({
-          name: result.carMake,
-          raw: JSON.stringify(images.filter(item => !item.thumbnail.startsWith('https://encrypted-tbn0.gstatic.com/images')).map(p => {
-            return {
-              low: p.thumbnail.replace(SERPAPI_IMAGE_PREFIX, ''),
-              hd: p.original,
-            }
-          }))
-        })
+        bot.sendPhoto(chatId, filterImages[0].original, opts),
+        CarImage.create({ name: result.carMake, hash: makeHash, names: imagesName }),
       ]);
 
       return;
     }
 
-    console.log(result);
-    let url = '';
-    let newIndex = -1;
-    const raw = JSON.parse(existingImage.raw) as { low: string, hd: string }[];
-    if (result.type === "search") {
-      url = `${SERPAPI_IMAGE_PREFIX}${raw[0].low}`;
-      newIndex = 0;
-    }
-
-    if (result.type === 'image') {
-      if (result.isAnother || result.carIndex < 0) {
-        newIndex = getRandomInt(0, raw.length - 1);
-        while (newIndex === result.carIndex) {
-          // TODO: escape after X tries
-          newIndex = getRandomInt(0, raw.length - 1);
-        }
-
-        url = `${SERPAPI_IMAGE_PREFIX}${raw[newIndex].low}`;
+    await bot.sendPhoto(chatId, path.join(CAR_MEDIA_DIRECTORY, existingImage.names[0]), {
+      reply_markup: {
+        inline_keyboard: [[{ text: 'Get Another', callback_data: `another_${makeHash}_0` }]]
       }
-
-      if (result.isHd) {
-        url = raw[result.carIndex]?.hd?.split(/[?#]/)[0];
-        newIndex = result.carIndex;
-      }
-    }
-
-    console.log(newIndex, url);
-    if (url && newIndex > -1) {
-      const keyboard = [{ text: 'Get Another', callback_data: `another_${encodeURIComponent(result.carMake)}_${newIndex}` }];
-      if ((result.type === "image" && !result.isHd) || result.type === 'search') {
-        keyboard.push({ text: 'Force HD', callback_data: `hd_${encodeURIComponent(result.carMake)}_${newIndex}` });
-      }
-
-      const opts: TelegramBot.SendMessageOptions = {
-        reply_markup: {
-          inline_keyboard: [keyboard]
-        }
-      };
-      await bot.sendPhoto(chatId, url, opts);
-    }
-
+    });
   } catch (error) {
     // we don't have to care if it throws
     if (result.type === 'image') {
@@ -142,6 +142,10 @@ async function handleResult(chatId: number, result: ScrapeResult): Promise<void>
 
   return;
 }
+
+async function downloadWorker({ url, name }: DownloadTask): Promise<void> {
+  await download(url, CAR_MEDIA_DIRECTORY, { filename: name });
+};
 
 async function asyncWorker(msg: UserConversation): Promise<void> {
   if (msg.text?.startsWith('/') || !msg.text) {
@@ -185,6 +189,31 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
   const { isForceResearch, text, chatId, key } = msg;
 
   if (!/^[A-Z]{1,3}\d{1,4}[A-Z]?$/.test(text)) {
+    if (text.startsWith("another_")) {
+      const value = text.split("_");
+      if (value.length !== 3) {
+        return;
+      }
+
+      return handleResult(chatId, {
+        success: true,
+        isAnother: true,
+        type: "another",
+        hash: value[1],
+        previousIndex: Number(value[2])
+      });
+    }
+
+    for (const [key, value] of Object.entries(CAR_BRANDS)) {
+      if (text.toLowerCase().startsWith(key)) {
+        return handleResult(chatId, {
+          success: true,
+          type: "image",
+          carMake: text,
+        });
+      }
+    }
+
     return handleResult(chatId, {
       success: false,
       type: "search",

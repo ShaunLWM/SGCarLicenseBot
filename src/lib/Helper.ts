@@ -1,13 +1,8 @@
-import fs from "fs";
+import fs from "fs-extra";
 import SerpApi from "google-search-results-nodejs";
-import * as Captcha from "2captcha";
-import Jimp from "jimp";
-import puppeteer, { TimeoutError } from "puppeteer";
 import TelegramBot from "node-telegram-bot-api";
 import Car from "../models/Car";
-import dayjs from "dayjs";
 
-const solver = new Captcha.Solver(process.env.CAPTCHA_KEY as string);
 const search = new SerpApi.GoogleSearch(process.env.SERPAPI_KEY);
 
 export type UserConversation = {
@@ -17,9 +12,16 @@ export type UserConversation = {
   key: string;
 }
 
+export type DownloadTask = {
+  url: string;
+  name: string;
+}
+
 export const SERPAPI_IMAGE_PREFIX = "https://serpapi.com/searches/";
 
 export const TEMPORARY_CACHE_DIRECTORY = "./.cache";
+
+export const CAR_MEDIA_DIRECTORY = "./.media";
 
 export async function wait(ms = 1000) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -266,4 +268,8 @@ export function validateCarLicense(licensePlate: string) {
   const ccd = sum % 19;
   const icd = ccd === 0 ? 0 : 19 - ccd;
   return `${plate}${icdDict[icd]}`;
+}
+
+export function extname(url: string) {
+  return (url = url.substr(1 + url.lastIndexOf("/")).split('?')[0]).split('#')[0].substr(url.lastIndexOf("."))
 }
