@@ -18,6 +18,8 @@ import CarImage from "./models/CarImage";
 
 const USER_CONVERSATION: Record<number, Record<string, { text: string, messageId: number }>> = {}
 
+let currentQueueNumber = -1;
+
 const COMPULSORY_ENV = ['TELEGRAM_TOKEN', 'CAPTCHA_KEY', 'SERPAPI_KEY', 'MONGO_DB'];
 if (COMPULSORY_ENV.some(env => !process.env[env])) {
   console.error('Missing environment variables');
@@ -38,9 +40,11 @@ function debugLog(chatId: number, str: string) {
   console.log(`[${chatId}] ${str}`);
 }
 
-async function handleResult(chatId: number, result: ScrapeResult) {
+async function handleResult(chatId: number, result: ScrapeResult): Promise<void> {
+  currentQueueNumber -= 1;
   if (!result.success) {
-    return bot.sendMessage(chatId, `${result.license ? `Search: ${result.license}\n` : ''}Error: ${result.message || 'Please contact admin'}`);
+    bot.sendMessage(chatId, `${result.license ? `Search: ${result.license}\n` : ''}Error: ${result.message || 'Please contact admin'}`);
+    return
   }
 
   if (result.type === "search") {
@@ -50,7 +54,7 @@ async function handleResult(chatId: number, result: ScrapeResult) {
       }
     };
 
-    bot.sendMessage(chatId,
+    await bot.sendMessage(chatId,
       `${result.license}\nModel: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}${result.lastUpdated ? `\nLast Updated: ${result.lastUpdated}` : ''}`,
       result.lastUpdated ? opts : undefined);
   }
@@ -71,7 +75,7 @@ async function handleResult(chatId: number, result: ScrapeResult) {
         }
       };
 
-      return await Promise.allSettled([
+      await Promise.allSettled([
         bot.sendPhoto(chatId, image, opts),
         CarImage.create({
           name: result.carMake,
@@ -83,6 +87,8 @@ async function handleResult(chatId: number, result: ScrapeResult) {
           }))
         })
       ]);
+
+      return;
     }
 
     console.log(result);
@@ -129,16 +135,18 @@ async function handleResult(chatId: number, result: ScrapeResult) {
   } catch (error) {
     // we don't have to care if it throws
     if (result.type === 'image') {
-      return bot.sendMessage(chatId, `No image found for: ${result.carMake}`);
+      bot.sendMessage(chatId, `No image found for: ${result.carMake}`);
+      return;
     }
   }
 
   return;
 }
 
-async function asyncWorker(msg: UserConversation): Promise<any> {
+async function asyncWorker(msg: UserConversation): Promise<void> {
   if (msg.text?.startsWith('/') || !msg.text) {
-    return { success: false, };
+    currentQueueNumber -= 1;
+    return;
   }
 
   let page: puppeteer.Page;
@@ -177,7 +185,11 @@ async function asyncWorker(msg: UserConversation): Promise<any> {
   const { isForceResearch, text, chatId, key } = msg;
 
   if (!/^[A-Z]{1,3}\d{1,4}[A-Z]?$/.test(text)) {
-    return;
+    return handleResult(chatId, {
+      success: false,
+      type: "search",
+      message: "Invalid car license plate",
+    });
   }
 
   await bot.sendChatAction(chatId, "typing");
@@ -219,13 +231,13 @@ async function asyncWorker(msg: UserConversation): Promise<any> {
   } catch (error) {
     debugLog(chatId, "No Captcha found");
     await page.screenshot({ path: `${licensePlate}-1.png`, fullPage: true });
-    return { success: false, message: '(1) No Recaptcha found. Please try again later' };
+    return handleResult(chatId, { success: false, message: '(1) No Recaptcha found. Please try again later' });
   }
 
   const captchaElement = await page.$(selector);
   if (!captchaElement) {
     await page.screenshot({ path: `${licensePlate}-2.png`, fullPage: true });
-    return { success: false, message: '(2) No Recaptcha found. Please try again later' };
+    return handleResult(chatId, { success: false, message: '(2) No Recaptcha found. Please try again later' });
   }
 
   await captchaElement.screenshot({ path: USER_SCREENSHOT });
@@ -306,17 +318,15 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
     return;
   }
 
+  currentQueueNumber += 1;
   const key = hash(JSON.stringify(msg));
-  console.log(key);
-  const currentQueueLength = q.length();
-  console.log(currentQueueLength);
 
   if (typeof USER_CONVERSATION[msg.chatId] === 'undefined') {
     USER_CONVERSATION[msg.chatId] = {};
   }
 
-  if (currentQueueLength > 0) {
-    const result = await bot.sendMessage(msg.chatId, `Queue no: ${currentQueueLength}\nYour request will be processed in a few minutes.`);
+  if (currentQueueNumber > 0) {
+    const result = await bot.sendMessage(msg.chatId, `Queue no: ${currentQueueNumber}\nYour request will be processed in a few minutes.`);
     USER_CONVERSATION[msg.chatId][key] = { text: msg.text, messageId: result.message_id };
   }
 
