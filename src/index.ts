@@ -280,7 +280,7 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
       if (existCounter === 5) {
         throw new Error('No captcha found');
       }
-      await wait(1000);
+      await wait(500);
       existCounter++;
     }
 
