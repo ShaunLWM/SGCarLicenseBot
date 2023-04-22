@@ -4,224 +4,162 @@ import "dotenv/config";
 import * as Captcha from "2captcha";
 import dayjs from "dayjs";
 import RelativeTime from "dayjs/plugin/relativeTime";
-import fs from "fs";
-import SerpApi from "google-search-results-nodejs";
+import type { queueAsPromised } from "fastq";
+import fastq from "fastq";
+import fs from "fs-extra";
 import Jimp from "jimp";
 import mongoose from "mongoose";
 import TelegramBot from "node-telegram-bot-api";
-import puppeteer, { TimeoutError } from "puppeteer";
+import puppeteer from "puppeteer";
+import download from "download";
+import path from "path";
 
-import { CAR_BRANDS, cleanText, cleanupCache, createDirectory, getRandomInt, SERPAPI_IMAGE_PREFIX, TEMPORARY_CACHE_DIRECTORY, wait } from "./lib/Helper";
+import { CAR_BRANDS, CAR_MEDIA_DIRECTORY, cleanText, cleanupCache, createDirectory, DownloadTask, extname, findExistingCar, getRandomInt, hash, isNormalMessage, searchImage, SERPAPI_IMAGE_PREFIX, TEMPORARY_CACHE_DIRECTORY, UserConversation, validateCarLicense, wait } from "./lib/Helper";
 import Car from "./models/Car";
 import CarImage from "./models/CarImage";
 
-const USER_CONVERSATION: Record<number, { text: string, messageId: number }> = {}
+const USER_CONVERSATION: Record<number, Record<string, { text: string, messageId: number }>> = {}
 
-dayjs.extend(RelativeTime);
+let currentQueueNumber = -1;
 
-if (!fs.existsSync(TEMPORARY_CACHE_DIRECTORY)) {
-  fs.mkdirSync(TEMPORARY_CACHE_DIRECTORY);
-}
-
-const COMPULSORY_ENV = ['TELEGRAM_TOKEN', 'CAPTCHA_KEY', 'SERPAPI_KEY', 'MONGO_DB'];
+const COMPULSORY_ENV = ['TELEGRAM_TOKEN', 'CAPTCHA_KEY', 'SERPAPI_KEY', 'MONGO_DB', 'TELEGRAM_ADMIN_ID'];
 if (COMPULSORY_ENV.some(env => !process.env[env])) {
   console.error('Missing environment variables');
   process.exit(1);
 }
 
-const search = new SerpApi.GoogleSearch(process.env.SERPAPI_KEY);
+dayjs.extend(RelativeTime);
+
+fs.ensureDirSync(CAR_MEDIA_DIRECTORY);
+fs.ensureDirSync(TEMPORARY_CACHE_DIRECTORY);
+
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN as string, { polling: true });
 const solver = new Captcha.Solver(process.env.CAPTCHA_KEY as string);
+const q: queueAsPromised<UserConversation> = fastq.promise(asyncWorker, 1);
+const DownloadQueue: queueAsPromised<DownloadTask> = fastq.promise(downloadWorker, 2);
 
-const searchImage = async (name: string): Promise<ImagesResult[]> => {
-  return new Promise((resolve, reject) => {
-    const params = {
-      engine: "google",
-      q: name,
-      location: "Singapore",
-      google_domain: "google.com.sg",
-      gl: "sg",
-      hl: "en",
-      tbm: "isch"
+function debugLog(chatId: number, str: string) {
+  console.log(`[${chatId}] ${str}`);
+}
+
+async function handleResult(chatId: number, result: ScrapeResult): Promise<void> {
+  currentQueueNumber -= 1;
+  if (!result.success) {
+    bot.sendMessage(chatId, `${result.license ? `Search: ${result.license}\n` : ''}Error: ${result.message || 'Please contact admin'}`);
+    return
+  }
+
+  if (result.type === "search") {
+    const opts: TelegramBot.SendMessageOptions = {
+      reply_markup: {
+        inline_keyboard: [[{ text: 'Force Update', callback_data: result.license }]]
+      }
     };
 
-    search.json(params, (data: SerpApiResult) => {
-      if (data["images_results"]) {
-        return resolve(data["images_results"]);
+    await bot.sendMessage(chatId,
+      `${result.license}\nModel: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}${result.lastUpdated ? `\nLast Updated: ${result.lastUpdated}` : ''}`,
+      result.lastUpdated ? opts : undefined);
+  }
+
+  try {
+    const isAnotherImageSearch = result.type === "another";
+    const opts = isAnotherImageSearch ? { hash: result.hash } : { name: result.carMake };
+    const existingImage = await CarImage.findOne(opts).exec();
+    const makeHash = isAnotherImageSearch ? result.hash : hash(result.carMake);
+    const hasAtLeastOneImage = existingImage && existingImage.names.length > 0 && fs.existsSync(path.join(CAR_MEDIA_DIRECTORY, existingImage.names[0]));
+
+    if (isAnotherImageSearch) {
+      if (!hasAtLeastOneImage) {
+        return;
       }
 
-      return reject(false);
-    });
-  });
-}
+      let currentFile = existingImage.names[0];
+      let newIndex = getRandomInt(0, existingImage.names.length - 1);
+      while (newIndex === result.previousIndex) {
+        // TODO: escape after X tries
+        newIndex = getRandomInt(0, existingImage.names.length - 1);
+      }
 
-bot.on('message', async (msg) => {
-  handleMesage(msg);
-});
-
-bot.on('callback_query', async (msg) => {
-  handleMesage(msg, true);
-});
-
-const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQuery, isForceResearch = false) => {
-  const msg = {
-    text: (isNormalMessage(message) ? message.text : message.data) || '',
-    chatId: isNormalMessage(message) ? message.chat.id : message.from.id,
-  }
-
-  if (!msg.text) {
-    return;
-  }
-
-  await bot.sendChatAction(msg.chatId, 'typing');
-  const result = await startCarSearch(msg, isForceResearch);
-
-  if (USER_CONVERSATION[msg.chatId]) {
-    await bot.deleteMessage(msg.chatId, `${USER_CONVERSATION[msg.chatId].messageId}`);
-    delete USER_CONVERSATION[msg.chatId];
-  }
-
-  if (result.success) {
-    if (result.type === 'search') {
+      currentFile = path.join(CAR_MEDIA_DIRECTORY, existingImage.names[newIndex]);
+      const keyboard = [{ text: 'Get Another', callback_data: `another_${makeHash}_${newIndex}` }];
       const opts: TelegramBot.SendMessageOptions = {
         reply_markup: {
-          inline_keyboard: [[{ text: 'Force Update', callback_data: result.license }]]
+          inline_keyboard: [keyboard]
         }
       };
 
-      bot.sendMessage(msg.chatId,
-        `${result.license}\nModel: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}${result.lastUpdated ? `\nLast Updated: ${result.lastUpdated}` : ''}`,
-        result.lastUpdated ? opts : undefined);
+      await bot.sendPhoto(chatId, currentFile, opts);
+      return;
     }
 
-    try {
-      const existingImage = await CarImage.findOne({ name: result.carMake }).exec();
-      if (!existingImage) {
-        const images = await searchImage(result.carMake);
-        const image = images?.[0]?.thumbnail;
-        if (!image) {
-          return bot.sendMessage(msg.chatId, `No image found for: ${msg.text}`);
-        }
-
-        const opts: TelegramBot.SendMessageOptions = {
-          reply_markup: {
-            inline_keyboard: [[{ text: 'Get Another', callback_data: `another_${encodeURIComponent(result.carMake)}_0` }, { text: 'Force HD', callback_data: `hd_${encodeURIComponent(result.carMake)}_0` }]]
-          }
-        };
-
-        await Promise.allSettled([
-          bot.sendPhoto(msg.chatId, image, opts),
-          CarImage.create({
-            name: result.carMake,
-            raw: JSON.stringify(images.filter(item => !item.thumbnail.startsWith('https://encrypted-tbn0.gstatic.com/images')).map(p => {
-              return {
-                low: p.thumbnail.replace(SERPAPI_IMAGE_PREFIX, ''),
-                hd: p.original,
-              }
-            }))
-          })
-        ]);
-      } else {
-        console.log(result);
-        let url = '';
-        let newIndex = -1;
-        const raw = JSON.parse(existingImage.raw) as { low: string, hd: string }[];
-        if (result.type === "search") {
-          url = `${SERPAPI_IMAGE_PREFIX}${raw[0].low}`;
-          newIndex = 0;
-        }
-
-        if (result.type === 'image') {
-          if (result.isAnother || result.carIndex < 0) {
-            newIndex = getRandomInt(0, raw.length - 1);
-            while (newIndex === result.carIndex) {
-              // TODO: escape after X tries
-              newIndex = getRandomInt(0, raw.length - 1);
-            }
-
-            url = `${SERPAPI_IMAGE_PREFIX}${raw[newIndex].low}`;
-          }
-
-          if (result.isHd) {
-            url = raw[result.carIndex]?.hd?.split(/[?#]/)[0];
-            newIndex = result.carIndex;
-          }
-        }
-
-        console.log(newIndex, url);
-        if (url && newIndex > -1) {
-          const keyboard = [{ text: 'Get Another', callback_data: `another_${encodeURIComponent(result.carMake)}_${newIndex}` }];
-          if ((result.type === "image" && !result.isHd) || result.type === 'search') {
-            keyboard.push({ text: 'Force HD', callback_data: `hd_${encodeURIComponent(result.carMake)}_${newIndex}` });
-          }
-
-          const opts: TelegramBot.SendMessageOptions = {
-            reply_markup: {
-              inline_keyboard: [keyboard]
-            }
-          };
-          await bot.sendPhoto(msg.chatId, url, opts);
-        }
+    if (!hasAtLeastOneImage) {
+      // this applies to license plate search + normal query search
+      console.log(`[${makeHash}] No existing image found, searching for ${result.carMake}`);
+      const images = await searchImage(result.carMake);
+      console.log(images);
+      const image = images?.[0]?.thumbnail;
+      if (!image) {
+        return debugLog(0, `Unable to find image for ${result.carMake}`);
       }
-    } catch (error) {
-      // we don't have to care if it throws
-      if (result.type === 'image') {
-        return bot.sendMessage(msg.chatId, `No image found for: ${msg.text}`);
+
+      const opts: TelegramBot.SendMessageOptions = {
+        reply_markup: {
+          inline_keyboard: [[{ text: 'Get Another', callback_data: `another_${makeHash}_0` }]]
+        }
+      };
+
+      const filterImages = images.filter(item => !item.thumbnail.startsWith('https://encrypted-tbn0.gstatic.com/images'));
+      if (filterImages.length < 1) {
+        return;
       }
+
+      const imagesName = filterImages.slice(0, 5).map((p, i) => {
+        const name = `${makeHash}_${i}${extname(p.original) || "jpg"}`;
+        DownloadQueue.push({ url: p.original, name, })
+        return name;
+      });
+
+      await Promise.allSettled([
+        bot.sendPhoto(chatId, filterImages[0].original, opts),
+        CarImage.create({ name: result.carMake, hash: makeHash, names: imagesName }),
+      ]);
+
+      return;
     }
 
+    await bot.sendPhoto(chatId, path.join(CAR_MEDIA_DIRECTORY, existingImage.names[0]), {
+      reply_markup: {
+        inline_keyboard: [[{ text: 'Get Another', callback_data: `another_${makeHash}_0` }]]
+      }
+    });
+  } catch (error) {
+    // we don't have to care if it throws
+    if (result.type === 'image') {
+      bot.sendMessage(chatId, `No image found for: ${result.carMake}`);
+      return;
+    }
+  }
+
+  return;
+}
+
+async function downloadWorker({ url, name }: DownloadTask): Promise<void> {
+  await download(url, CAR_MEDIA_DIRECTORY, { filename: name });
+};
+
+async function asyncWorker(msg: UserConversation): Promise<void> {
+  if (msg.text?.startsWith('/') || !msg.text) {
+    currentQueueNumber -= 1;
     return;
   }
 
-  if (result.message) {
-    return bot.sendMessage(msg.chatId, `${result.license ? `Search: ${result.license}\n` : ''}Error: ${result.message}`);
-  }
-};
-
-function isNormalMessage(msg: TelegramBot.Message | TelegramBot.CallbackQuery): msg is TelegramBot.Message {
-  return (msg as TelegramBot.Message)?.chat?.id !== undefined;
-}
-
-async function startCarSearch(msg: { text: string, chatId: number }, isForceResearch: boolean): Promise<ScrapeResult> {
-  async function findExistingCar(str: string) {
-    try {
-      return Car.findOne({ license: str }).exec();
-    } catch (e) {
-      return undefined;
-    }
-  }
-
-  async function sendUserMsg(str: string, isEdit = false) {
-    if (isEdit && USER_CONVERSATION[msg.chatId]) {
-      return bot.editMessageText(`${USER_CONVERSATION[msg.chatId].text}\n\n${str}`, { chat_id: msg.chatId, message_id: USER_CONVERSATION[msg.chatId].messageId });
-    }
-
-    const results = await bot.sendMessage(msg.chatId, str);
-    if (results) {
-      USER_CONVERSATION[msg.chatId] = {
-        text: str,
-        messageId: results.message_id,
-      };
-    }
-  }
-
-  function debugLog(str: string) {
-    console.log(`[${msg.chatId}] ${str}`);
-  }
-
-  async function waitForElement(selector: string) {
-    try {
-      const result = await page.waitForSelector(selector, { timeout: 2000 });
-      return result;
-    } catch (e) {
-      if (e instanceof TimeoutError) {
-        throw new Error('Timeout. Try again later');
-      }
-      throw e;
-    }
-  }
+  let page: puppeteer.Page;
 
   async function getElementText(selector: string) {
+    if (!page) {
+      return false;
+    }
+
     try {
       const node = await page.$(selector);
       if (!node) {
@@ -234,78 +172,101 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
     }
   }
 
-  if (msg.text?.startsWith('/') || !msg.text) {
-    return { success: false, };
-  }
-
-  const licensePlate = msg.text.trim().toUpperCase();
-  let editedCarSearch;
-  let isAnother = false;
-  let isHd = false;
-  let carIndex = -1;
-
-  if (!/^[A-Z]{1,3}\d{1,4}[A-Z]$/.test(licensePlate)) {
-    if (licensePlate.startsWith('ANOTHER_') || licensePlate.startsWith('HD_')) {
-      isAnother = licensePlate.startsWith('ANOTHER_');
-      isHd = licensePlate.startsWith('HD_');
-      const split = licensePlate.split('_');
-      editedCarSearch = decodeURIComponent(split[1]);
-      carIndex = parseInt(split[2]);
-    } else {
-      let carSearch = { key: '', value: '' };
-      for (const [key, value] of Object.entries(CAR_BRANDS)) {
-        if (licensePlate.toLowerCase().startsWith(key)) {
-          carSearch.key = key;
-          carSearch.value = value;
-          break;
-        }
-      }
-
-      if (!carSearch.key) {
-        return { success: false, message: 'Please enter a valid car license plate or a car build' };
-      }
-
-      editedCarSearch = licensePlate.toLowerCase().replace(carSearch.key, carSearch.value).trim();
+  async function sendUserMsg(chatId: number, key: string, msg: string, isEdit = false) {
+    if (isEdit && USER_CONVERSATION[chatId][key]) {
+      return bot.editMessageText(`${USER_CONVERSATION[chatId][key].text}\n\n${msg}`, { chat_id: chatId, message_id: USER_CONVERSATION[chatId][key].messageId });
     }
 
-    return { success: true, type: "image", carMake: editedCarSearch, isAnother, isHd, carIndex };
+    const results = await bot.sendMessage(chatId, msg);
+    if (results) {
+      USER_CONVERSATION[chatId][key] = {
+        text: msg,
+        messageId: results.message_id,
+      };
+    }
   }
 
+  const { isForceResearch, text, chatId, key } = msg;
+
+  if (!/^[A-Z]{1,3}\d{1,4}[A-Z]?$/.test(text)) {
+    if (text.startsWith("another_")) {
+      const value = text.split("_");
+      if (value.length !== 3) {
+        return;
+      }
+
+      return handleResult(chatId, {
+        success: true,
+        isAnother: true,
+        type: "another",
+        hash: value[1],
+        previousIndex: Number(value[2])
+      });
+    }
+
+    for (const [key, value] of Object.entries(CAR_BRANDS)) {
+      if (text.toLowerCase().startsWith(key)) {
+        return handleResult(chatId, {
+          success: true,
+          type: "image",
+          carMake: text,
+        });
+      }
+    }
+
+    return handleResult(chatId, {
+      success: false,
+      type: "search",
+      message: "Invalid car license plate",
+    });
+  }
+
+  await bot.sendChatAction(chatId, "typing");
+  const licensePlate = validateCarLicense(text);
   if (!isForceResearch) {
-    const existingCar = await findExistingCar(licensePlate);
-    if (existingCar) {
-      const response: ResultSuccess = {
+    // try to find existing car first
+    const result = await findExistingCar(licensePlate);
+    if (result) {
+      return handleResult(chatId, {
         success: true,
         license: licensePlate,
-        carMake: existingCar.carMake,
-        roadTaxExpiry: existingCar.tax,
-        lastUpdated: dayjs(existingCar.lastUpdated).fromNow(),
+        carMake: result.carMake,
+        roadTaxExpiry: result.tax,
+        lastUpdated: dayjs(result.lastUpdated).fromNow(),
         type: "search",
-      };
-      return response;
+      });
     }
   }
 
-  debugLog(`Searching for: ${licensePlate}`);
-  await sendUserMsg(`Searching for: ${licensePlate}`);
+  // GMT+8 converted to UTC -> 12am to 6am = 4pm to 10pm UTC
+  const isMaintenanceTime = dayjs().hour() >= 15 && dayjs().hour() <= 21;
+  if (isMaintenanceTime) {
+    return handleResult(chatId, {
+      success: false,
+      type: "search",
+      message: "Website is under maintenance. Please try again later.",
+    });
+  }
+
+  await sendUserMsg(chatId, key, `Searching for: ${licensePlate}`);
+
+  const USER_SCREENSHOT = createDirectory(`screenshot_${chatId}.png`);
   const browser = await puppeteer.launch();
-  const page = await browser.newPage();
+  page = await browser.newPage();
   await page.goto('https://vrl.lta.gov.sg/lta/vrl/action/pubfunc?ID=EnquireRoadTaxExpDtProxy', { waitUntil: 'networkidle2' });
   const selector = '#main-content > div.dt-container > div:nth-child(2) > form > div.form-group.clearfix > div > iframe';
   try {
-    await page.waitForTimeout(1250);
-    await page.waitForSelector(selector);
+    await page.waitForSelector(selector, { timeout: 3000 });
   } catch (error) {
-    debugLog("No Captcha found");
+    debugLog(chatId, "No Captcha found");
     await page.screenshot({ path: `${licensePlate}-1.png`, fullPage: true });
-    return { success: false, message: '(1) No Recaptcha found. Please try again later' };
+    return handleResult(chatId, { success: false, message: '(1) No Recaptcha found. Please try again later' });
   }
 
-  const USER_SCREENSHOT = createDirectory(`screenshot_${msg.chatId}.png`);
   const captchaElement = await page.$(selector);
   if (!captchaElement) {
     await page.screenshot({ path: `${licensePlate}-2.png`, fullPage: true });
-    return { success: false, message: '(2) No Recaptcha found. Please try again later' };
+    return handleResult(chatId, { success: false, message: '(2) No Recaptcha found. Please try again later' });
   }
 
   await captchaElement.screenshot({ path: USER_SCREENSHOT });
@@ -323,23 +284,22 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
       existCounter++;
     }
 
-    debugLog("Captcha found. Submitting...");
-    await sendUserMsg('Trying to solve Catcha, please hold on as it might take up to 10s...', true);
+    debugLog(chatId, "Captcha found. Submitting...");
+    await sendUserMsg(chatId, key, 'Trying to solve Catcha, this might take up to 10s...', true);
     const result = await solver.imageCaptcha(fs.readFileSync(USER_SCREENSHOT, "base64"));
-    debugLog(`Got Captcha result: ${JSON.stringify(result)}`);
+    debugLog(chatId, `Got Captcha result: ${JSON.stringify(result)}`);
     await page.type('#main-content > div.dt-container > div:nth-child(2) > form > div.form-group.clearfix > div > div > input.form-control', result.data, { delay: 100 });
     await page.type('#vehNoField', licensePlate);
     await page.click('#agreeTCbox');
-    debugLog("Submitting form..");
+    debugLog(chatId, "Submitting form..");
     await Promise.all([
       page.click('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-btn-group > button'),
       page.waitForNavigation({ waitUntil: 'networkidle2' })
     ]);
 
-
     const [carMake, notFound] = await Promise.allSettled([getElementText('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-container > div.dt-payment-dtls > div > div.col-xs-5.separated > div:nth-child(2) > p'), getElementText('#backend-error > table > tbody > tr > td > p')]);
     if ((notFound.status === "fulfilled" && notFound.value === "Please note the following:") || carMake.status === "rejected" || (carMake.status === "fulfilled" && !carMake.value)) {
-      debugLog("No car make found");
+      debugLog(chatId, "No car make found");
       throw new Error('No results for car license plate');
     }
 
@@ -347,32 +307,60 @@ async function startCarSearch(msg: { text: string, chatId: number }, isForceRese
 
     response['carMake'] = cleanText(carMake.value || '');
 
-    const roadTaxExpiryElement = await waitForElement("#main-content > div.dt-container > div:nth-child(2) > form > div.dt-container > div.dt-detail-content.dt-usg-dt-wrpr > div > div > p.vrlDT-content-p");
+    const roadTaxExpiryElement = await page.waitForSelector("#main-content > div.dt-container > div:nth-child(2) > form > div.dt-container > div.dt-detail-content.dt-usg-dt-wrpr > div > div > p.vrlDT-content-p", { timeout: 2500 });
     if (roadTaxExpiryElement) {
       const roadTaxExpiry = await roadTaxExpiryElement.evaluate(el => el.textContent);
       response['roadTaxExpiry'] = cleanText(roadTaxExpiry || '');
     }
 
-    debugLog("Success. Returning results to user..");
+    debugLog(chatId, "Success. Returning results to user..");
     await Promise.allSettled([
       browser.close(),
       Car.findOneAndUpdate({ license: licensePlate }, { carMake: response.carMake, tax: response.roadTaxExpiry, lastUpdated: new Date() }, { upsert: true }).exec(),
     ]);
-    return response;
+    return handleResult(chatId, response);
   } catch (error) {
     console.error(error);
     let message = 'Unknown Error'
     if (error instanceof Error) message = error.message
-    return { success: false, message, license: licensePlate };
+    return handleResult(chatId, { success: false, message, license: licensePlate });
   } finally {
     cleanupCache(USER_SCREENSHOT);
-    try {
-      await browser.close();
-    } catch (_e) {
-
-    }
   }
 }
+
+bot.on("message", async (msg) => {
+  handleMesage(msg);
+});
+
+bot.on("callback_query", async (msg) => {
+  handleMesage(msg, true);
+});
+
+const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQuery, isForceResearch = false) => {
+  const msg = {
+    text: (isNormalMessage(message) ? message.text : message.data) || '',
+    chatId: isNormalMessage(message) ? message.chat.id : message.from.id,
+  }
+
+  if (!msg.text) {
+    return;
+  }
+
+  currentQueueNumber += 1;
+  const key = hash(JSON.stringify(msg));
+
+  if (typeof USER_CONVERSATION[msg.chatId] === 'undefined') {
+    USER_CONVERSATION[msg.chatId] = {};
+  }
+
+  if (currentQueueNumber > 0) {
+    const result = await bot.sendMessage(msg.chatId, `Queue no: ${currentQueueNumber}\nYour request will be processed in a few minutes.`);
+    USER_CONVERSATION[msg.chatId][key] = { text: msg.text, messageId: result.message_id };
+  }
+
+  await q.push({ ...msg, isForceResearch, key });
+};
 
 async function setup() {
   await mongoose.connect(process.env.MONGO_DB as string);
