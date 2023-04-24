@@ -199,7 +199,7 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
       });
     }
 
-    for (const [key, value] of Object.entries(CAR_BRANDS)) {
+    for (const [key] of Object.entries(CAR_BRANDS)) {
       if (text.toLowerCase().startsWith(key)) {
         return handleResult(chatId, {
           success: true,
