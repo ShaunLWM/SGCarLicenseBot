@@ -184,9 +184,10 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
 
   const { isForceResearch, text, chatId, key } = msg;
 
-  if (!/^[A-Z]{1,3}\d{1,4}[A-Z]?$/.test(text)) {
-    if (text.startsWith("another_")) {
-      const value = text.split("_");
+  let licensePlate = text.toUpperCase();
+  if (!/^[A-Z]{1,3}\d{1,4}[A-Z]?$/.test(licensePlate)) {
+    if (licensePlate.startsWith("ANOTHER_")) {
+      const value = licensePlate.split("_");
       if (value.length !== 3) {
         return;
       }
@@ -218,7 +219,8 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
   }
 
   await bot.sendChatAction(chatId, "typing");
-  const licensePlate = validateCarLicense(text);
+  licensePlate = validateCarLicense(text);
+
   if (!isForceResearch) {
     // try to find existing car first
     const result = await findExistingCar(licensePlate);
