@@ -62,6 +62,7 @@ async function handleResult(chatId: number, result: ScrapeResult): Promise<void>
   }
 
   try {
+    await bot.sendChatAction(chatId, "typing");
     const isAnotherImageSearch = result.type === "another";
     const opts = isAnotherImageSearch ? { hash: result.hash } : { name: result.carMake };
     const existingImage = await CarImage.findOne(opts).exec();
