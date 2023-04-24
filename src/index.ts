@@ -108,19 +108,14 @@ async function handleResult(chatId: number, result: ScrapeResult): Promise<void>
         }
       };
 
-      const filterImages = images.filter(item => !item.thumbnail.startsWith('https://encrypted-tbn0.gstatic.com/images'));
-      if (filterImages.length < 1) {
-        return;
-      }
-
-      const imagesName = filterImages.slice(0, 5).map((p, i) => {
+      const imagesName = images.slice(0, 5).map((p, i) => {
         const name = `${makeHash}_${i}${extname(p.original) || "jpg"}`;
         DownloadQueue.push({ url: p.original, name, })
         return name;
       });
 
       await Promise.allSettled([
-        bot.sendPhoto(chatId, filterImages[0].original, opts),
+        bot.sendPhoto(chatId, images[0].original, opts),
         CarImage.create({ name: result.carMake, hash: makeHash, names: imagesName }),
       ]);
 
