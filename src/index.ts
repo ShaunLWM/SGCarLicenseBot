@@ -237,7 +237,7 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
   }
 
   // GMT+8 converted to UTC -> 12am to 6am = 4pm to 10pm UTC
-  const isMaintenanceTime = dayjs().hour() >= 15 && dayjs().hour() <= 21;
+  const isMaintenanceTime = dayjs().hour() >= 0 && dayjs().hour() <= 6;
   if (isMaintenanceTime) {
     return handleResult(chatId, {
       success: false,
