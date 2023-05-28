@@ -254,10 +254,8 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
     await page.type('#vehNoField', licensePlate);
     await page.click('#agreeTCbox');
     debugLog(chatId, "Submitting form..");
-    await Promise.all([
-      page.click('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-btn-group > button'),
-      page.waitForNavigation({ waitUntil: 'networkidle2' })
-    ]);
+    await page.click('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-btn-group > button'),
+    await page.waitForNavigation({ waitUntil: 'networkidle2' })
 
     const [carMake, notFound] = await Promise.allSettled([getElementText('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-container > div.dt-payment-dtls > div > div.col-xs-5.separated > div:nth-child(2) > p'), getElementText('#backend-error > table > tbody > tr > td > p')]);
     if ((notFound.status === "fulfilled" && notFound.value === "Please note the following:") || carMake.status === "rejected" || (carMake.status === "fulfilled" && !carMake.value)) {
