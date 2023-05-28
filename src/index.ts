@@ -250,7 +250,7 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
   await sendUserMsg(chatId, key, `Searching for: ${licensePlate}`);
 
   const browser = await puppeteer.launch({
-    headless: process.env.NODE_ENV === "dev",
+    headless: process.env.NODE_ENV !== "dev",
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
