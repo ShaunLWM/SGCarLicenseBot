@@ -10,13 +10,17 @@ import fs from "fs-extra";
 import mongoose from "mongoose";
 import TelegramBot from "node-telegram-bot-api";
 import path from "path";
-import puppeteer from "puppeteer";
+import { Page } from "puppeteer";
+import puppeteer from "puppeteer-extra";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 import { CAR_BRANDS, CAR_MEDIA_DIRECTORY, cleanText, DownloadTask, extname, findExistingCar, getRandomInt, hash, isNormalMessage, searchImage, TEMPORARY_CACHE_DIRECTORY, UserConversation, validateCarLicense, wait } from "./lib/Helper";
 import Car from "./models/Car";
 import CarImage from "./models/CarImage";
 
 const USER_CONVERSATION: Record<number, Record<string, { text: string, messageId: number }>> = {}
+
+puppeteer.use(StealthPlugin());
 
 let currentQueueNumber = -1;
 
@@ -146,7 +150,7 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
     return;
   }
 
-  let page: puppeteer.Page;
+  let page: Page;
 
   async function getElementText(selector: string) {
     if (!page) {
@@ -245,7 +249,11 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
 
   await sendUserMsg(chatId, key, `Searching for: ${licensePlate}`);
 
-  const browser = await puppeteer.launch({ headless: process.env.NODE_ENV === "dev" });
+  const browser = await puppeteer.launch({
+    headless: process.env.NODE_ENV === "dev",
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+
   page = await browser.newPage();
   await page.goto('https://vrl.lta.gov.sg/lta/vrl/action/pubfunc?ID=EnquireRoadTaxExpDtProxy', { waitUntil: 'networkidle2' });
   try {
