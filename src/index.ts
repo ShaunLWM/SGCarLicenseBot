@@ -12,7 +12,7 @@ import TelegramBot from "node-telegram-bot-api";
 import path from "path";
 import puppeteer from "puppeteer";
 
-import { CAR_BRANDS, CAR_MEDIA_DIRECTORY, cleanText, cleanupCache, createDirectory, DownloadTask, extname, findExistingCar, getRandomInt, hash, isNormalMessage, searchImage, TEMPORARY_CACHE_DIRECTORY, UserConversation, validateCarLicense, wait } from "./lib/Helper";
+import { CAR_BRANDS, CAR_MEDIA_DIRECTORY, cleanText, DownloadTask, extname, findExistingCar, getRandomInt, hash, isNormalMessage, searchImage, TEMPORARY_CACHE_DIRECTORY, UserConversation, validateCarLicense, wait } from "./lib/Helper";
 import Car from "./models/Car";
 import CarImage from "./models/CarImage";
 
@@ -245,7 +245,6 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
 
   await sendUserMsg(chatId, key, `Searching for: ${licensePlate}`);
 
-  const USER_SCREENSHOT = createDirectory(`screenshot_${chatId}.png`);
   const browser = await puppeteer.launch({ headless: process.env.NODE_ENV === "dev" });
   page = await browser.newPage();
   await page.goto('https://vrl.lta.gov.sg/lta/vrl/action/pubfunc?ID=EnquireRoadTaxExpDtProxy', { waitUntil: 'networkidle2' });
@@ -254,8 +253,8 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
     await page.type('#vehNoField', licensePlate);
     await page.click('#agreeTCbox');
     debugLog(chatId, "Submitting form..");
-    await page.click('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-btn-group > button'),
-    await page.waitForNavigation({ waitUntil: 'networkidle2' })
+    await page.click('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-btn-group > button');
+    await page.waitForNavigation({ waitUntil: 'networkidle2' });
 
     const [carMake, notFound] = await Promise.allSettled([getElementText('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-container > div.dt-payment-dtls > div > div.col-xs-5.separated > div:nth-child(2) > p'), getElementText('#backend-error > table > tbody > tr > td > p')]);
     if ((notFound.status === "fulfilled" && notFound.value === "Please note the following:") || carMake.status === "rejected" || (carMake.status === "fulfilled" && !carMake.value)) {
@@ -282,7 +281,6 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
     if (error instanceof Error) message = error.message
     return handleResult(chatId, { success: false, message, license: licensePlate });
   } finally {
-    cleanupCache(USER_SCREENSHOT);
     try {
       browser.close();
     } catch (e) { }
