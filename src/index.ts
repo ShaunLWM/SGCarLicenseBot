@@ -1,20 +1,18 @@
 process.env.NTBA_FIX_319 = 1 as any;
 import "dotenv/config";
 
-import * as Captcha from "2captcha";
 import dayjs from "dayjs";
 import RelativeTime from "dayjs/plugin/relativeTime";
+import download from "download";
 import type { queueAsPromised } from "fastq";
 import fastq from "fastq";
 import fs from "fs-extra";
-import Jimp from "jimp";
 import mongoose from "mongoose";
 import TelegramBot from "node-telegram-bot-api";
-import puppeteer from "puppeteer";
-import download from "download";
 import path from "path";
+import puppeteer from "puppeteer";
 
-import { CAR_BRANDS, CAR_MEDIA_DIRECTORY, cleanText, cleanupCache, createDirectory, DownloadTask, extname, findExistingCar, getRandomInt, hash, isNormalMessage, searchImage, SERPAPI_IMAGE_PREFIX, TEMPORARY_CACHE_DIRECTORY, UserConversation, validateCarLicense, wait } from "./lib/Helper";
+import { CAR_BRANDS, CAR_MEDIA_DIRECTORY, cleanText, cleanupCache, createDirectory, DownloadTask, extname, findExistingCar, getRandomInt, hash, isNormalMessage, searchImage, TEMPORARY_CACHE_DIRECTORY, UserConversation, validateCarLicense, wait } from "./lib/Helper";
 import Car from "./models/Car";
 import CarImage from "./models/CarImage";
 
@@ -34,7 +32,6 @@ fs.ensureDirSync(CAR_MEDIA_DIRECTORY);
 fs.ensureDirSync(TEMPORARY_CACHE_DIRECTORY);
 
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN as string, { polling: true });
-const solver = new Captcha.Solver(process.env.CAPTCHA_KEY as string);
 const q: queueAsPromised<UserConversation> = fastq.promise(asyncWorker, 1);
 const DownloadQueue: queueAsPromised<DownloadTask> = fastq.promise(downloadWorker, 2);
 
@@ -249,44 +246,11 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
   await sendUserMsg(chatId, key, `Searching for: ${licensePlate}`);
 
   const USER_SCREENSHOT = createDirectory(`screenshot_${chatId}.png`);
-  const browser = await puppeteer.launch();
+  const browser = await puppeteer.launch({ headless: process.env.NODE_ENV === "dev" });
   page = await browser.newPage();
   await page.goto('https://vrl.lta.gov.sg/lta/vrl/action/pubfunc?ID=EnquireRoadTaxExpDtProxy', { waitUntil: 'networkidle2' });
-  const selector = '#main-content > div.dt-container > div:nth-child(2) > form > div.form-group.clearfix > div > iframe';
   try {
-    await page.waitForSelector(selector, { timeout: 3000 });
-  } catch (error) {
-    debugLog(chatId, "No Captcha found");
-    await page.screenshot({ path: `${licensePlate}-1.png`, fullPage: true });
-    return handleResult(chatId, { success: false, message: '(1) No Recaptcha found. Please try again later' });
-  }
-
-  const captchaElement = await page.$(selector);
-  if (!captchaElement) {
-    await page.screenshot({ path: `${licensePlate}-2.png`, fullPage: true });
-    return handleResult(chatId, { success: false, message: '(2) No Recaptcha found. Please try again later' });
-  }
-
-  await captchaElement.screenshot({ path: USER_SCREENSHOT });
-
-  try {
-    const file = await Jimp.read(USER_SCREENSHOT);
-    fs.rmSync(USER_SCREENSHOT);
-    file.crop(0, 0, 380, 100).write(USER_SCREENSHOT);
-    let existCounter = 0;
-    while (!fs.existsSync(USER_SCREENSHOT)) {
-      if (existCounter === 5) {
-        throw new Error('No captcha found');
-      }
-      await wait(500);
-      existCounter++;
-    }
-
-    debugLog(chatId, "Captcha found. Submitting...");
-    await sendUserMsg(chatId, key, 'Trying to solve Catcha, this might take up to 10s...', true);
-    const result = await solver.imageCaptcha(fs.readFileSync(USER_SCREENSHOT, "base64"));
-    debugLog(chatId, `Got Captcha result: ${JSON.stringify(result)}`);
-    await page.type('#main-content > div.dt-container > div:nth-child(2) > form > div.form-group.clearfix > div > div > input.form-control', result.data, { delay: 100 });
+    await wait(500);
     await page.type('#vehNoField', licensePlate);
     await page.click('#agreeTCbox');
     debugLog(chatId, "Submitting form..");
@@ -312,10 +276,7 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
     }
 
     debugLog(chatId, "Success. Returning results to user..");
-    await Promise.allSettled([
-      browser.close(),
-      Car.findOneAndUpdate({ license: licensePlate }, { carMake: response.carMake, tax: response.roadTaxExpiry, lastUpdated: new Date() }, { upsert: true }).exec(),
-    ]);
+    await Car.findOneAndUpdate({ license: licensePlate }, { carMake: response.carMake, tax: response.roadTaxExpiry, lastUpdated: new Date() }, { upsert: true }).exec();
     return handleResult(chatId, response);
   } catch (error) {
     console.error(error);
@@ -324,6 +285,9 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
     return handleResult(chatId, { success: false, message, license: licensePlate });
   } finally {
     cleanupCache(USER_SCREENSHOT);
+    try {
+      browser.close();
+    } catch (e) { }
   }
 }
 
