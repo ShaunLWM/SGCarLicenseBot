@@ -10,17 +10,12 @@ import fs from "fs-extra";
 import mongoose from "mongoose";
 import TelegramBot from "node-telegram-bot-api";
 import path from "path";
-import { Page } from "puppeteer";
-import puppeteer from "puppeteer-extra";
-import StealthPlugin from "puppeteer-extra-plugin-stealth";
-
-import { CAR_BRANDS, CAR_MEDIA_DIRECTORY, cleanText, DownloadTask, extname, findExistingCar, getRandomInt, hash, isNormalMessage, searchImage, TEMPORARY_CACHE_DIRECTORY, UserConversation, validateCarLicense, wait } from "./lib/Helper";
+import { Supra } from "supra.ts";
+import { CAR_BRANDS, CAR_MEDIA_DIRECTORY, DownloadTask, extname, findExistingCar, getRandomInt, hash, isNormalMessage, searchImage, TEMPORARY_CACHE_DIRECTORY, UserConversation, validateCarLicense } from "./lib/Helper";
 import Car from "./models/Car";
 import CarImage from "./models/CarImage";
 
 const USER_CONVERSATION: Record<number, Record<string, { text: string, messageId: number }>> = {}
-
-puppeteer.use(StealthPlugin());
 
 let currentQueueNumber = -1;
 
@@ -36,6 +31,8 @@ fs.ensureDirSync(CAR_MEDIA_DIRECTORY);
 fs.ensureDirSync(TEMPORARY_CACHE_DIRECTORY);
 
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN as string, { polling: true });
+const supra = new Supra({ headless: process.env.NODE_ENV !== "dev" });
+
 const q: queueAsPromised<UserConversation> = fastq.promise(asyncWorker, 1);
 const DownloadQueue: queueAsPromised<DownloadTask> = fastq.promise(downloadWorker, 2);
 
@@ -150,25 +147,6 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
     return;
   }
 
-  let page: Page;
-
-  async function getElementText(selector: string) {
-    if (!page) {
-      return false;
-    }
-
-    try {
-      const node = await page.$(selector);
-      if (!node) {
-        return false;
-      }
-
-      return await node.evaluate(el => el.textContent)
-    } catch (error) {
-      return false;
-    }
-  }
-
   async function sendUserMsg(chatId: number, key: string, msg: string, isEdit = false) {
     if (isEdit && USER_CONVERSATION[chatId][key]) {
       return bot.editMessageText(`${USER_CONVERSATION[chatId][key].text}\n\n${msg}`, { chat_id: chatId, message_id: USER_CONVERSATION[chatId][key].messageId });
@@ -214,7 +192,6 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
 
     return handleResult(chatId, {
       success: false,
-      type: "search",
       message: "Invalid car license plate",
     });
   }
@@ -242,56 +219,27 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
   if (isMaintenanceTime) {
     return handleResult(chatId, {
       success: false,
-      type: "search",
       message: "Website is under maintenance. Please try again later.",
     });
   }
 
   await sendUserMsg(chatId, key, `Searching for: ${licensePlate}`);
 
-  const browser = await puppeteer.launch({
-    headless: process.env.NODE_ENV !== "dev",
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-
-  page = await browser.newPage();
-  await page.goto('https://vrl.lta.gov.sg/lta/vrl/action/pubfunc?ID=EnquireRoadTaxExpDtProxy', { waitUntil: 'networkidle2' });
   try {
-    await wait(500);
-    await page.type('#vehNoField', licensePlate);
-    await page.click('#agreeTCbox');
-    debugLog(chatId, "Submitting form..");
-    await page.click('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-btn-group > button');
-    await page.waitForNavigation({ waitUntil: 'networkidle2' });
-
-    const [carMake, notFound] = await Promise.allSettled([getElementText('#main-content > div.dt-container > div:nth-child(2) > form > div.dt-container > div.dt-payment-dtls > div > div.col-xs-5.separated > div:nth-child(2) > p'), getElementText('#backend-error > table > tbody > tr > td > p')]);
-    if ((notFound.status === "fulfilled" && notFound.value === "Please note the following:") || carMake.status === "rejected" || (carMake.status === "fulfilled" && !carMake.value)) {
-      debugLog(chatId, "No car make found");
-      throw new Error('No results for car license plate');
-    }
-
-    const response: ResultSuccess = { success: true, license: licensePlate, carMake: '', type: "search" };
-
-    response['carMake'] = cleanText(carMake.value || '');
-
-    const roadTaxExpiryElement = await page.waitForSelector("#main-content > div.dt-container > div:nth-child(2) > form > div.dt-container > div.dt-detail-content.dt-usg-dt-wrpr > div > div > p.vrlDT-content-p", { timeout: 2500 });
-    if (roadTaxExpiryElement) {
-      const roadTaxExpiry = await roadTaxExpiryElement.evaluate(el => el.textContent);
-      response['roadTaxExpiry'] = cleanText(roadTaxExpiry || '');
-    }
-
+    const result = await supra.search(licensePlate);
+    const response: ResultSuccess = { success: true, type: "search", ...result };
     debugLog(chatId, "Success. Returning results to user..");
     await Car.findOneAndUpdate({ license: licensePlate }, { carMake: response.carMake, tax: response.roadTaxExpiry, lastUpdated: new Date() }, { upsert: true }).exec();
     return handleResult(chatId, response);
   } catch (error) {
     console.error(error);
-    let message = 'Unknown Error'
-    if (error instanceof Error) message = error.message
-    return handleResult(chatId, { success: false, message, license: licensePlate });
+    return handleResult(chatId, { success: false, message: 'No results for car license plate', license: licensePlate });
   } finally {
     try {
-      browser.close();
-    } catch (e) { }
+      await supra.close();
+    } catch (e) {
+
+    }
   }
 }
 
