@@ -7,14 +7,13 @@
   "license": "MIT",
   "devDependencies": {
     "@types/cors": "^2.8.12",
+    "@types/download": "^8.0.2",
     "@types/express": "^4.17.13",
     "@types/fs-extra": "^11.0.1",
     "@types/node-telegram-bot-api": "^0.57.1",
     "typescript": "^4.7.4"
   },
   "dependencies": {
-    "2captcha": "^3.0.4",
-    "@types/download": "^8.0.2",
     "cors": "^2.8.5",
     "dayjs": "^1.11.4",
     "deep-object-diff": "^1.1.7",
@@ -24,12 +23,8 @@
     "fastq": "^1.15.0",
     "fs-extra": "^11.1.1",
     "google-search-results-nodejs": "^2.1.0",
-    "jimp": "^0.16.1",
     "mongoose": "^6.5.0",
     "node-telegram-bot-api": "^0.58.0",
-    "puppeteer": "^20.4.0",
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "sgcarmart.js": "^0.0.1-alpha.18",
     "supra.ts": "^0.0.1-beta.7"
   },
