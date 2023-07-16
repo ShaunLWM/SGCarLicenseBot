@@ -2838,10 +2838,10 @@ supports-color@^5.3.0:
   dependencies:
     has-flag "^3.0.0"
 
-supra.ts@^0.0.1-beta.7:
-  version "0.0.1-beta.7"
-  resolved "https://registry.yarnpkg.com/supra.ts/-/supra.ts-0.0.1-beta.7.tgz#cfac93d06a74eeee51b4e31111793eaf7f0bd313"
-  integrity sha512-F7CpHNzxoGtk5DBeZkZzgEuI66dtXn5H7nkhuaN10PT6v9koBTjZlGKUHp0LBO7Rksvhw1eatENjBXvYFyccHw==
+supra.ts@^0.0.1-beta.8:
+  version "0.0.1-beta.8"
+  resolved "https://registry.yarnpkg.com/supra.ts/-/supra.ts-0.0.1-beta.8.tgz#5ef40bf6739c2a0257697e64aa16736bba56c5bd"
+  integrity sha512-nQBLCLJMcB+e1L9H569jEbtd5QagyjQRNf43UlkZ+aPTgSeNK23wBe4Kwaq5PVmYX11Vem9nj4WREFyvcrn23w==
   dependencies:
     puppeteer "20.7.3"
     puppeteer-extra "3.3.6"

@@ -11,7 +11,7 @@ import mongoose from "mongoose";
 import TelegramBot from "node-telegram-bot-api";
 import path from "path";
 import { Supra } from "supra.ts";
-import { CAR_BRANDS, CAR_MEDIA_DIRECTORY, DownloadTask, extname, findExistingCar, getRandomInt, hash, isNormalMessage, searchImage, TEMPORARY_CACHE_DIRECTORY, UserConversation, validateCarLicense } from "./lib/Helper";
+import { CAR_BRANDS, CAR_MEDIA_DIRECTORY, DownloadTask, extname, findExistingCar, getRandomInt, hash, isNormalMessage, searchImage, TEMPORARY_CACHE_DIRECTORY, TEMPORARY_SCREENSHOT_DIRECTORY, UserConversation, validateCarLicense } from "./lib/Helper";
 import Car from "./models/Car";
 import CarImage from "./models/CarImage";
 
@@ -31,7 +31,7 @@ fs.ensureDirSync(CAR_MEDIA_DIRECTORY);
 fs.ensureDirSync(TEMPORARY_CACHE_DIRECTORY);
 
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN as string, { polling: true });
-const supra = new Supra({ headless: process.env.NODE_ENV !== "dev" });
+const supra = new Supra({ headless: process.env.NODE_ENV !== "dev", screenshotDebugDirectory: TEMPORARY_SCREENSHOT_DIRECTORY });
 
 const q: queueAsPromised<UserConversation> = fastq.promise(asyncWorker, 1);
 const DownloadQueue: queueAsPromised<DownloadTask> = fastq.promise(downloadWorker, 2);

@@ -20,6 +20,7 @@ export type DownloadTask = {
 export const SERPAPI_IMAGE_PREFIX = "https://serpapi.com/searches/";
 
 export const TEMPORARY_CACHE_DIRECTORY = "./.cache";
+export const TEMPORARY_SCREENSHOT_DIRECTORY = "./.screenshots";
 
 export const CAR_MEDIA_DIRECTORY = "./.media";
 
