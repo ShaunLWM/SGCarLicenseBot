@@ -29,6 +29,7 @@ dayjs.extend(RelativeTime);
 
 fs.ensureDirSync(CAR_MEDIA_DIRECTORY);
 fs.ensureDirSync(TEMPORARY_CACHE_DIRECTORY);
+fs.ensureDirSync(TEMPORARY_SCREENSHOT_DIRECTORY);
 
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN as string, { polling: true });
 const supra = new Supra({ headless: process.env.NODE_ENV !== "dev", screenshotDebugDirectory: TEMPORARY_SCREENSHOT_DIRECTORY });
