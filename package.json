@@ -26,7 +26,7 @@
     "mongoose": "^6.5.0",
     "node-telegram-bot-api": "^0.58.0",
     "sgcarmart.js": "^0.0.1-alpha.18",
-    "supra.ts": "^0.0.1-beta.10"
+    "supra.ts": "^0.0.1-beta.11"
   },
   "scripts": {
     "start": "node dist/index.js",

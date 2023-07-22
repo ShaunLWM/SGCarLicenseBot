@@ -1922,7 +1922,7 @@ memory-pager@^1.0.2:
   resolved "https://registry.yarnpkg.com/memory-pager/-/memory-pager-1.5.0.tgz#d8751655d22d384682741c972f2c3d6dfa3e66b5"
   integrity sha512-ZS4Bp4r/Zoeq6+NLJpP+0Zzm0pR8whtGPf1XExKLJBAczGMnSi3It14OiNCStjQjM6NU1okjQGSxgEZN8eBYKg==
 
-merge-deep@^3.0.1:
+merge-deep@^3.0.1, merge-deep@^3.0.2:
   version "3.0.3"
   resolved "https://registry.yarnpkg.com/merge-deep/-/merge-deep-3.0.3.tgz#1a2b2ae926da8b2ae93a0ac15d90cd1922766003"
   integrity sha512-qtmzAS6t6grwEkNrunqTBdn0qKwFgNWvlxUbAV8es9M7Ot1EbyApytCnvE0jALPa46ZpKDUo527kKiaWplmlFA==
@@ -2385,6 +2385,15 @@ puppeteer-core@20.7.3:
     debug "4.3.4"
     devtools-protocol "0.0.1135028"
     ws "8.13.0"
+
+puppeteer-extra-plugin-recaptcha@^3.6.8:
+  version "3.6.8"
+  resolved "https://registry.yarnpkg.com/puppeteer-extra-plugin-recaptcha/-/puppeteer-extra-plugin-recaptcha-3.6.8.tgz#be3644efd421600f3230b7fd2916dbc452c7704f"
+  integrity sha512-AY2HG1ZFlSi4xs+Hy84LtRJ95DIfnbjR3Az64dJGVW8gr/hBAGEWRlXTMzea7YOmxO3Nc8Ak3CcUgjgp1gIu1w==
+  dependencies:
+    debug "^4.1.1"
+    merge-deep "^3.0.2"
+    puppeteer-extra-plugin "^3.2.3"
 
 puppeteer-extra-plugin-stealth@2.11.2:
   version "2.11.2"
@@ -2854,13 +2863,14 @@ supports-color@^5.3.0:
   dependencies:
     has-flag "^3.0.0"
 
-supra.ts@^0.0.1-beta.10:
-  version "0.0.1-beta.10"
-  resolved "https://registry.yarnpkg.com/supra.ts/-/supra.ts-0.0.1-beta.10.tgz#2192fba38cc999d5ae2ba360ba19ea62986d4479"
-  integrity sha512-Zg+4rIRcDct8mI4B/JD/tv4gw8xJbYiLVfmsnSMX0vKW/c0uMTGBbSxTZ3KEb8jtEyH0sYf5fU8+ZyseKvUpXw==
+supra.ts@^0.0.1-beta.11:
+  version "0.0.1-beta.11"
+  resolved "https://registry.yarnpkg.com/supra.ts/-/supra.ts-0.0.1-beta.11.tgz#9411c77fa7d365d193de70530ef07d8ad6f58a50"
+  integrity sha512-NrZRHWC/4o075L8SuMqWpM5S6TSGX7HSfRxHzriyplm0veoS1YQD84LmDZ9jD36QOcYrWZkGd9ySfFBpVTgxAw==
   dependencies:
     puppeteer "20.7.3"
     puppeteer-extra "3.3.6"
+    puppeteer-extra-plugin-recaptcha "^3.6.8"
     puppeteer-extra-plugin-stealth "2.11.2"
 
 tar-fs@3.0.2:
