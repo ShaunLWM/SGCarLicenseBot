@@ -32,7 +32,7 @@ fs.ensureDirSync(TEMPORARY_CACHE_DIRECTORY);
 fs.ensureDirSync(TEMPORARY_SCREENSHOT_DIRECTORY);
 
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN as string, { polling: true });
-const supra = new Supra({ headless: process.env.NODE_ENV !== "dev", screenshotDebugDirectory: TEMPORARY_SCREENSHOT_DIRECTORY });
+const supra = new Supra({ headless: process.env.NODE_ENV !== "dev", screenshotDebugDirectory: TEMPORARY_SCREENSHOT_DIRECTORY, puppeteerLaunchArgs: ['--window-size=1920,1080'] });
 
 const q: queueAsPromised<UserConversation> = fastq.promise(asyncWorker, 1);
 const DownloadQueue: queueAsPromised<DownloadTask> = fastq.promise(downloadWorker, 2);
