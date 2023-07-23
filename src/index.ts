@@ -34,8 +34,9 @@ fs.ensureDirSync(TEMPORARY_SCREENSHOT_DIRECTORY);
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN as string, { polling: true });
 const supra = new Supra({
   headless: process.env.NODE_ENV !== "dev",
+  genericSleepTime: 1000,
   screenshotDebugDirectory: TEMPORARY_SCREENSHOT_DIRECTORY,
-  puppeteerLaunchArgs: ['--window-size=1920,1080'],
+  puppeteerLaunchArgs: ['--window-size=1920,1080', '--disable-web-security', '--disable-features=IsolateOrigins,site-per-process'],
   recaptchaKey: process.env.CAPTCHA_KEY as string,
 });
 
