@@ -204,7 +204,7 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
   }
 
   await bot.sendChatAction(chatId, "typing");
-  licensePlate = validateCarLicense(text);
+  licensePlate = validateCarLicense(licensePlate);
 
   if (!isForceResearch) {
     // try to find existing car first
