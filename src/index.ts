@@ -11,7 +11,7 @@ import mongoose from "mongoose";
 import TelegramBot from "node-telegram-bot-api";
 import path from "path";
 import { Supra } from "supra.ts";
-import { CAR_BRANDS, CAR_MEDIA_DIRECTORY, DownloadTask, extname, findExistingCar, getRandomInt, hash, isNormalMessage, searchImage, TEMPORARY_CACHE_DIRECTORY, TEMPORARY_SCREENSHOT_DIRECTORY, UserConversation, validateCarLicense } from "./lib/Helper";
+import { CAR_BRANDS, CAR_MEDIA_DIRECTORY, DownloadTask, extname, findExistingCar, getPlateRecognition, getRandomInt, hash, isNormalMessage, searchImage, TEMPORARY_CACHE_DIRECTORY, TEMPORARY_SCREENSHOT_DIRECTORY, UserConversation, validateCarLicense } from "./lib/Helper";
 import Car from "./models/Car";
 import CarImage from "./models/CarImage";
 
@@ -19,7 +19,7 @@ const USER_CONVERSATION: Record<number, Record<string, { text: string, messageId
 
 let currentQueueNumber = -1;
 
-const COMPULSORY_ENV = ['TELEGRAM_TOKEN', 'CAPTCHA_KEY', 'SERPAPI_KEY', 'MONGO_DB', 'TELEGRAM_ADMIN_ID'];
+const COMPULSORY_ENV = ['TELEGRAM_TOKEN', 'CAPTCHA_KEY', 'SERPAPI_KEY', 'MONGO_DB', 'TELEGRAM_ADMIN_ID', 'PLATERECOGNIZER_KEY'];
 if (COMPULSORY_ENV.some(env => !process.env[env])) {
   console.error('Missing environment variables');
   process.exit(1);
@@ -47,10 +47,26 @@ function debugLog(chatId: number, str: string) {
   console.log(`[${chatId}] ${str}`);
 }
 
-async function handleResult(chatId: number, result: ScrapeResult): Promise<void> {
+async function sendUserMsg(chatId: number, key: string, msg: string, options?: TelegramBot.SendMessageOptions) {
+  if (USER_CONVERSATION[chatId][key]) {
+    return bot.editMessageText(`${USER_CONVERSATION[chatId][key].text}\n\n${msg}`, { chat_id: chatId, message_id: USER_CONVERSATION[chatId][key].messageId });
+  }
+
+  const results = await bot.sendMessage(chatId, msg, options);
+  if (results) {
+    USER_CONVERSATION[chatId][key] = {
+      text: msg,
+      messageId: results.message_id,
+    };
+
+    return results;
+  }
+}
+
+async function handleResult(chatId: number, key: string, result: ScrapeResult): Promise<void> {
   currentQueueNumber -= 1;
   if (!result.success) {
-    bot.sendMessage(chatId, `${result.license ? `Search: ${result.license}\n` : ''}Error: ${result.message || 'Please contact admin'}`);
+    sendUserMsg(chatId, key, `${result.license ? `Search: ${result.license}\n` : ''}Error: ${result.message || 'Please contact admin'}`);
     return
   }
 
@@ -61,7 +77,7 @@ async function handleResult(chatId: number, result: ScrapeResult): Promise<void>
       }
     };
 
-    await bot.sendMessage(chatId,
+    await sendUserMsg(chatId, key,
       `${result.license}\nModel: ${result.carMake}${result.roadTaxExpiry ? `\nRoad Tax Expiry: ${result.roadTaxExpiry}` : ''}${result.lastUpdated ? `\nLast Updated: ${result.lastUpdated}` : ''}`,
       result.lastUpdated ? opts : undefined);
   }
@@ -136,7 +152,7 @@ async function handleResult(chatId: number, result: ScrapeResult): Promise<void>
   } catch (error) {
     // we don't have to care if it throws
     if (result.type === 'image') {
-      bot.sendMessage(chatId, `No image found for: ${result.carMake}`);
+      sendUserMsg(chatId, key, `No image found for: ${result.carMake}`);
       return;
     }
   }
@@ -149,28 +165,37 @@ async function downloadWorker({ url, name }: DownloadTask): Promise<void> {
 };
 
 async function asyncWorker(msg: UserConversation): Promise<void> {
-  if (msg.text?.startsWith('/') || !msg.text) {
+  if (msg.text?.startsWith('/') || (!msg.text && !msg.image)) {
     currentQueueNumber -= 1;
     return;
   }
 
-  async function sendUserMsg(chatId: number, key: string, msg: string, isEdit = false) {
-    if (isEdit && USER_CONVERSATION[chatId][key]) {
-      return bot.editMessageText(`${USER_CONVERSATION[chatId][key].text}\n\n${msg}`, { chat_id: chatId, message_id: USER_CONVERSATION[chatId][key].messageId });
+  const { isForceResearch, text, chatId, key, image } = msg;
+
+  let decodedImagePlate;
+  if (image) {
+    const img = await bot.getFile(image.file_id);
+    if (!img || !img?.file_path) {
+      return;
     }
 
-    const results = await bot.sendMessage(chatId, msg);
-    if (results) {
-      USER_CONVERSATION[chatId][key] = {
-        text: msg,
-        messageId: results.message_id,
-      };
+    try {
+      await bot.sendChatAction(msg.chatId, "typing");
+      fs.ensureDirSync(CAR_MEDIA_DIRECTORY);
+      await bot.downloadFile(img.file_id, CAR_MEDIA_DIRECTORY);
+      const response = await getPlateRecognition(path.join(CAR_MEDIA_DIRECTORY, path.basename(img.file_path)));
+      console.log({ response });
+      if (response?.plate) {
+        decodedImagePlate = response.plate;
+      }
+    } catch (error) {
+      console.log(error);
+    } finally {
+      fs.removeSync(path.join(CAR_MEDIA_DIRECTORY, path.basename(img.file_path)));
     }
   }
 
-  const { isForceResearch, text, chatId, key } = msg;
-
-  let licensePlate = text.toUpperCase();
+  let licensePlate = decodedImagePlate?.toUpperCase() || text.toUpperCase();
   if (!/^[A-Z]{1,3}\d{1,4}[A-Z]?$/.test(licensePlate)) {
     if (licensePlate.startsWith("ANOTHER_")) {
       const value = licensePlate.split("_");
@@ -178,7 +203,7 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
         return;
       }
 
-      return handleResult(chatId, {
+      return handleResult(chatId, key, {
         success: true,
         isAnother: true,
         type: "another",
@@ -189,7 +214,7 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
 
     for (const [key] of Object.entries(CAR_BRANDS)) {
       if (text.toLowerCase().startsWith(key)) {
-        return handleResult(chatId, {
+        return handleResult(chatId, key, {
           success: true,
           type: "image",
           carMake: text,
@@ -197,7 +222,7 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
       }
     }
 
-    return handleResult(chatId, {
+    return handleResult(chatId, key, {
       success: false,
       message: "Invalid car license plate",
     });
@@ -210,7 +235,7 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
     // try to find existing car first
     const result = await findExistingCar(licensePlate);
     if (result) {
-      return handleResult(chatId, {
+      return handleResult(chatId, key, {
         success: true,
         license: licensePlate,
         carMake: result.carMake,
@@ -224,7 +249,7 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
   // GMT+8 converted to UTC -> 12am to 6am = 4pm to 10pm UTC
   const isMaintenanceTime = dayjs().hour() >= 0 && dayjs().hour() <= 6;
   if (isMaintenanceTime) {
-    return handleResult(chatId, {
+    return handleResult(chatId, key, {
       success: false,
       message: "Website is under maintenance. Please try again later.",
     });
@@ -237,10 +262,10 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
     const response: ResultSuccess = { success: true, type: "search", ...result };
     debugLog(chatId, "Success. Returning results to user..");
     await Car.findOneAndUpdate({ license: licensePlate }, { carMake: response.carMake, tax: response.roadTaxExpiry, lastUpdated: new Date() }, { upsert: true }).exec();
-    return handleResult(chatId, response);
+    return handleResult(chatId, key, response);
   } catch (error) {
     console.error(error);
-    return handleResult(chatId, { success: false, message: 'No results for car license plate', license: licensePlate });
+    return handleResult(chatId, key, { success: false, message: 'No results for car license plate', license: licensePlate });
   } finally {
     try {
       await supra.close();
@@ -259,12 +284,13 @@ bot.on("callback_query", async (msg) => {
 });
 
 const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQuery, isForceResearch = false) => {
-  const msg = {
+  const msg: Omit<UserConversation, "isForceResearch" | "key"> = {
     text: (isNormalMessage(message) ? message.text : message.data) || '',
     chatId: isNormalMessage(message) ? message.chat.id : message.from.id,
+    image: isNormalMessage(message) && message?.photo && message?.photo?.length > 0 ? message.photo[message.photo.length - 1] : undefined,
   }
 
-  if (!msg.text) {
+  if (!msg.text && !msg.image) {
     return;
   }
 
@@ -276,8 +302,10 @@ const handleMesage = async (message: TelegramBot.Message | TelegramBot.CallbackQ
   }
 
   if (currentQueueNumber > 0) {
-    const result = await bot.sendMessage(msg.chatId, `Queue no: ${currentQueueNumber}\nYour request will be processed in a few minutes.`);
-    USER_CONVERSATION[msg.chatId][key] = { text: msg.text, messageId: result.message_id };
+    const result = await sendUserMsg(msg.chatId, key, `Queue no: ${currentQueueNumber}\nYour request will be processed in a few minutes.`);
+    if (result && typeof result !== "boolean") {
+      USER_CONVERSATION[msg.chatId][key] = { text: msg.text, messageId: result?.message_id };
+    }
   }
 
   await q.push({ ...msg, isForceResearch, key });

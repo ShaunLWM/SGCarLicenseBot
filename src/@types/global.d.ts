@@ -94,3 +94,56 @@ interface ImagesResult {
   original: string
   is_product: boolean
 }
+
+
+interface LicensePlateResponse {
+  processing_time: number
+  results: LicensePlateResult[]
+  filename: string
+  version: number
+  camera_id: any
+  timestamp: string
+}
+
+interface LicensePlateResult {
+  plate: string
+  region: LicensePlateRegion
+  vehicle: LicensePlateVehicle
+  score: number
+  candidates: LicensePlateCandidate[]
+  dscore: number
+  model_make: LicensePlateModelMake[]
+  color: LicensePlateColor[]
+  orientation: LicensePlateOrientation[]
+}
+
+interface LicensePlateRegion {
+  code: string
+  score: number
+}
+
+interface LicensePlateVehicle {
+  score: number
+  type: string
+}
+
+interface LicensePlateCandidate {
+  score: number
+  plate: string
+}
+
+interface LicensePlateModelMake {
+  make: string
+  model: string
+  score: number
+}
+
+interface LicensePlateColor {
+  color: string
+  score: number
+}
+
+interface LicensePlateOrientation {
+  orientation: string
+  score: number
+}

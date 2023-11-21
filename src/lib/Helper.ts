@@ -1,5 +1,7 @@
+import FormData from "form-data";
 import fs from "fs-extra";
 import SerpApi from "google-search-results-nodejs";
+import fetch from "node-fetch";
 import TelegramBot from "node-telegram-bot-api";
 import Car from "../models/Car";
 
@@ -8,6 +10,7 @@ const search = new SerpApi.GoogleSearch(process.env.SERPAPI_KEY);
 export type UserConversation = {
   text: string;
   chatId: number;
+  image?: TelegramBot.PhotoSize;
   isForceResearch: boolean;
   key: string;
 }
@@ -273,4 +276,28 @@ export function validateCarLicense(licensePlate: string) {
 
 export function extname(url: string) {
   return (url = url.substr(1 + url.lastIndexOf("/")).split('?')[0]).split('#')[0].substr(url.lastIndexOf("."))
+}
+
+export async function getPlateRecognition(dir: string) {
+  const body = new FormData();
+  const file = await fs.readFile(dir, { encoding: "base64" });
+  body.append("upload", file);
+  body.append("regions", "sg");
+  const response = await fetch("https://api.platerecognizer.com/v1/plate-reader/", {
+    method: "POST",
+    headers: {
+      Authorization: `Token ${process.env.PLATERECOGNIZER_KEY!}`,
+    },
+    body,
+  });
+
+  const json = await response.json() as LicensePlateResponse;
+  if (!json || (json && json.results.length < 1)) {
+    return undefined;
+  }
+
+  return {
+    plate: json?.results?.[0]?.plate,
+    make: json.results?.[0]?.model_make ? `${json.results?.[0]?.model_make?.[0]?.make} ${json.results[0].model_make[0].model}` : undefined
+  };
 }
