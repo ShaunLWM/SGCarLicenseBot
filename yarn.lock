@@ -75,6 +75,11 @@
   resolved "https://registry.yarnpkg.com/@sindresorhus/is/-/is-0.7.0.tgz#9a06f4f137ee84d7df0460c1fdb1135ffa6c50fd"
   integrity sha512-ONhaKPIufzzrlNbqtWFFd+jlnemX6lJAgq9ZeiZtS7I1PIf/la7CW4m83rTXRnVnsMbW2k56pGYu7AUFJD9Pow==
 
+"@types/bezier-js@4":
+  version "4.1.3"
+  resolved "https://registry.yarnpkg.com/@types/bezier-js/-/bezier-js-4.1.3.tgz#237d4fe7e9aae7edd0c27a71f9f236f4ddc1c562"
+  integrity sha512-FNVVCu5mx/rJCWBxLTcL7oOajmGtWtBTDjq6DSUWUI12GeePivrZZXz+UgE0D6VYsLEjvExRO03z4hVtu3pTEQ==
+
 "@types/body-parser@*":
   version "1.19.2"
   resolved "https://registry.yarnpkg.com/@types/body-parser/-/body-parser-1.19.2.tgz#aea2059e28b7658639081347ac4fab3de166e6f0"
@@ -402,6 +407,11 @@ bcrypt-pbkdf@^1.0.0:
   integrity sha512-qeFIXtP4MSoi6NLqO12WfqARWWuCKi2Rn/9hJLEmtB5yTNr9DqFWkJRCf2qShWzPeAMRnOgCrq0sg/KLv5ES9w==
   dependencies:
     tweetnacl "^0.14.3"
+
+bezier-js@^6.1.3:
+  version "6.1.4"
+  resolved "https://registry.yarnpkg.com/bezier-js/-/bezier-js-6.1.4.tgz#c7828f6c8900562b69d5040afb881bcbdad82001"
+  integrity sha512-PA0FW9ZpcHbojUCMu28z9Vg/fNkwTj5YhusSAjHHDfHDGLxJ6YUKrAN2vk1fP2MMOxVw4Oko16FMlRGVBGqLKg==
 
 bl@^1.0.0, bl@^1.2.3:
   version "1.2.3"
@@ -1408,6 +1418,14 @@ getpass@^0.1.1:
   integrity sha512-0fzj9JxOLfJ+XGLhR8ze3unN0KZCgZwiSSDz168VERjK8Wl8kVSdcu2kspd4s4wtAa1y/qrVRiAA0WclVsu0ng==
   dependencies:
     assert-plus "^1.0.0"
+
+ghost-cursor@^1.1.19:
+  version "1.1.19"
+  resolved "https://registry.yarnpkg.com/ghost-cursor/-/ghost-cursor-1.1.19.tgz#0dfe790825b7c8255dc4ca9ed591f7062852296a"
+  integrity sha512-PJsM+edFPB7VxBASB1IZP2CP03R4goJ142RIfPslo1drin16WvNaZX7eSxY4zZpJ41u+F8rVbKFImPku9spHiQ==
+  dependencies:
+    "@types/bezier-js" "4"
+    bezier-js "^6.1.3"
 
 glob@^7.1.3:
   version "7.2.3"
@@ -2847,11 +2865,12 @@ supports-color@^5.3.0:
   dependencies:
     has-flag "^3.0.0"
 
-supra.ts@^0.0.1-beta.13:
-  version "0.0.1-beta.13"
-  resolved "https://registry.yarnpkg.com/supra.ts/-/supra.ts-0.0.1-beta.13.tgz#94461d6e40e0bb3321df052ca7663360c0b4ac79"
-  integrity sha512-rj4GWxw3+53fD/4KMdSCoxPi8XoROpxtN2IuQMr60YP2X79Qu0IdVr/GbbmvDYNzOf3dpOKFjENFGeDV89IsFQ==
+supra.ts@0.0.1-beta.15:
+  version "0.0.1-beta.15"
+  resolved "https://registry.yarnpkg.com/supra.ts/-/supra.ts-0.0.1-beta.15.tgz#839b1466cd71244997353d7e3bc1a1cf9eab5ceb"
+  integrity sha512-niuHEP0FGTKPGdyQ0M22QHWkcmFpjU83Q/pNyCHLP2xRoB48Ep9atDDiD7Ge+YLBTlcXJLMotb14VUANJzjSEw==
   dependencies:
+    ghost-cursor "^1.1.19"
     puppeteer "20.7.3"
     puppeteer-extra "3.3.6"
     puppeteer-extra-plugin-recaptcha "^3.6.8"
