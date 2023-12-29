@@ -1,0 +1,5 @@
+{
+  "uid": "sgcarbot",
+  "append": true,
+  "script": "dist/index.js"
+}
