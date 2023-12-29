@@ -248,7 +248,7 @@ async function asyncWorker(msg: UserConversation): Promise<void> {
 
   // GMT+8 converted to UTC -> 12am to 6am = 4pm to 10pm UTC
   const isMaintenanceTime = dayjs().hour() >= 0 && dayjs().hour() <= 6;
-  if (isMaintenanceTime) {
+  if (isMaintenanceTime && process.env?.MAINTENANCE_CHECK_ENABLED === "true") {
     return handleResult(chatId, key, {
       success: false,
       message: "Website is under maintenance. Please try again later.",
