@@ -2,10 +2,10 @@ import "dotenv/config";
 
 import { detailedDiff } from 'deep-object-diff';
 import mongoose from "mongoose";
-import { SGCarMart } from "sgcarmart.js";
+import { getCarInfo, getLatestUsed } from "sgcarmart.js";
 import CarHistory from "./models/CarHistory";
-import TrackedCar from "./models/TrackedCar";
 import SearchTerm from "./models/SearchTerm";
+import TrackedCar from "./models/TrackedCar";
 
 interface DiffObject {
   added: Record<string, any>;
@@ -13,7 +13,6 @@ interface DiffObject {
   updated: Record<string, any>;
 }
 
-const client = new SGCarMart();
 let timerId;
 
 async function onScrape() {
@@ -32,12 +31,12 @@ async function onScrape() {
   }
 
   for (const searchTerm of searchTerms) {
-    const { term, _id: searchId, registrationDate = 0, itemsPerPage = 20, yearFrom, yearTo } = searchTerm;
+    const { term, _id: searchId, registrationDate = 0, itemsPerPage = 20, yearFrom, yearTo } = searchTerm as any;
     console.log(`--------------------------------\n[cron] scraping ${term}\n--------------------------------`);
     let page = 1;
     while (true) {
       console.log(`[cron] page ${page}`);
-      const results = await client.getLatestUsed({ search: term, page, registrationDate, count: itemsPerPage, yearFrom, yearTo });
+      const results = await getLatestUsed({ search: term, page, registrationDate, count: itemsPerPage, yearFrom, yearTo });
       if (results.length < 1) {
         console.log(`[cron] no results found on page ${page}`);
         break;
@@ -47,7 +46,7 @@ async function onScrape() {
       console.log(`[cron] scraped ${carIds.length} cars`);
 
       const [carInfos, existingCars] = await Promise.all([
-        Promise.allSettled(carIds.map(id => client.getCarInfo(id, true))),
+        Promise.allSettled(carIds.map(id => getCarInfo({ id }))),
         TrackedCar.find({ carId: { $in: carIds } }).select(["carId", "data"]).exec(),
       ]);
 

@@ -31,12 +31,32 @@ fs.ensureDirSync(CAR_MEDIA_DIRECTORY);
 fs.ensureDirSync(TEMPORARY_CACHE_DIRECTORY);
 fs.ensureDirSync(TEMPORARY_SCREENSHOT_DIRECTORY);
 
-const bot = new TelegramBot(process.env.TELEGRAM_TOKEN as string, { polling: true });
+const bot = new TelegramBot(process.env.TELEGRAM_TOKEN as string, {
+  polling: true,
+  request: {
+    agentOptions: {
+      keepAlive: true,
+      family: 4
+    },
+    url: "https://api.telegram.org",
+  }
+});
+
 const supra = new Supra({
   headless: process.env.NODE_ENV !== "dev",
   genericSleepTime: 1000,
   screenshotDebugDirectory: TEMPORARY_SCREENSHOT_DIRECTORY,
-  puppeteerLaunchArgs: ['--window-size=1920,1080', '--disable-web-security', '--disable-features=IsolateOrigins,site-per-process'],
+  puppeteerLaunchArgs: [
+    '--disable-web-security',
+    '--disable-features=IsolateOrigins,site-per-process',
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-gpu",
+    "--disable-dev-shm-usage",
+    "--no-first-run",
+    "--no-zygote",
+    "--start-fullscreen"
+  ],
   recaptchaKey: process.env.CAPTCHA_KEY as string,
 });
 
