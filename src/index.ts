@@ -89,6 +89,10 @@ async function searchPlate(
 	}
 }
 
+bot.command("start", async (ctx) => {
+	await ctx.reply("Hello! Send me a Singapore license plate number.");
+});
+
 bot.on("message:photo", async (ctx) => {
 	let plate: string | undefined;
 	try {
@@ -136,14 +140,20 @@ bot.on("message:text", async (ctx) => {
 	}
 
 	try {
-		await ctx.replyWithChatAction("typing");
+		const status = await ctx.reply(`Searching for ${licensePlate}...`);
 		const result = await searchPlate(licensePlate);
-		await ctx.reply(result);
+		await ctx.api.editMessageText(ctx.chat.id, status.message_id, result);
 	} catch (error) {
 		console.error(error);
 		await ctx.reply("No results found for this license plate.");
 	}
 });
 
-bot.start();
-console.log("Bot started.");
+bot.catch((err) => {
+	console.error("Bot error:", err.message);
+});
+
+bot.start({
+	drop_pending_updates: true,
+	onStart: () => console.log("Bot started."),
+});
