@@ -1,0 +1,10 @@
+node_modules
+dist
+.cache
+.media
+.screenshots
+.env
+*.md
+.git
+.tmp
+data

@@ -1,0 +1,4 @@
+allowBuilds:
+  better-sqlite3: true
+minimumReleaseAgeExclude:
+  - supra.ts@1.1.0
