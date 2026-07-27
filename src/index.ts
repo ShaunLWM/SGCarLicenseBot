@@ -31,7 +31,7 @@ const bot = new Bot<MyContext>(process.env.TELEGRAM_TOKEN!);
 bot.api.config.use(hydrateFiles(bot.token));
 
 const supra = new Supra({
-	headless: process.env.NODE_ENV !== "dev",
+	headless: true,
 });
 
 let processing = false;
