@@ -4,8 +4,8 @@ import fs from "node:fs";
 import { type FileFlavor, hydrateFiles } from "@grammyjs/files";
 import dayjs from "dayjs";
 import RelativeTime from "dayjs/plugin/relativeTime";
-import { Bot, type Context } from "grammy";
-import { Supra } from "supra.ts";
+import { Bot, type Context, InlineKeyboard } from "grammy";
+import { Supra, SupraError, SupraErrorCode } from "supra.ts";
 import { findCar, upsertCar } from "./db";
 import { getPlateRecognition, validateCarLicense } from "./lib/Helper";
 
@@ -35,6 +35,28 @@ const supra = new Supra({
 });
 
 let processing = false;
+
+function retryKeyboard(plate: string) {
+	return new InlineKeyboard().text("Retry", `retry:${plate}`);
+}
+
+function errorMessage(error: unknown, plate: string): { text: string; retry: boolean } {
+	if (error instanceof SupraError) {
+		switch (error.code) {
+			case SupraErrorCode.NOT_FOUND:
+				return { text: `No record found for ${plate}.`, retry: false };
+			case SupraErrorCode.INVALID_INPUT:
+				return { text: `Invalid license plate: ${plate}`, retry: false };
+			case SupraErrorCode.CAPTCHA_FAILED:
+				return { text: `Search blocked by captcha. Please try again.`, retry: true };
+			case SupraErrorCode.MAINTENANCE:
+				return { text: "LTA service is under maintenance. Please try again later.", retry: true };
+			case SupraErrorCode.UNAVAILABLE:
+				return { text: "LTA service is currently unavailable. Please try again later.", retry: true };
+		}
+	}
+	return { text: `Failed to search for ${plate}.`, retry: true };
+}
 
 async function searchPlate(
 	licensePlate: string,
@@ -125,7 +147,8 @@ bot.on("message:photo", async (ctx) => {
 		await ctx.reply(result);
 	} catch (error) {
 		console.error(error);
-		await ctx.reply("No results found for this license plate.");
+		const { text, retry } = errorMessage(error, plate.toUpperCase());
+		await ctx.reply(text, retry ? { reply_markup: retryKeyboard(plate.toUpperCase()) } : undefined);
 	}
 });
 
@@ -145,7 +168,22 @@ bot.on("message:text", async (ctx) => {
 		await ctx.api.editMessageText(ctx.chat.id, status.message_id, result);
 	} catch (error) {
 		console.error(error);
-		await ctx.reply("No results found for this license plate.");
+		const { text, retry } = errorMessage(error, licensePlate);
+		await ctx.reply(text, retry ? { reply_markup: retryKeyboard(licensePlate) } : undefined);
+	}
+});
+
+bot.callbackQuery(/^retry:(.+)$/, async (ctx) => {
+	const plate = ctx.match[1];
+	await ctx.answerCallbackQuery();
+	try {
+		await ctx.editMessageText(`Retrying ${plate}...`);
+		const result = await searchPlate(plate, true);
+		await ctx.editMessageText(result);
+	} catch (error) {
+		console.error(error);
+		const { text, retry } = errorMessage(error, plate);
+		await ctx.editMessageText(text, retry ? { reply_markup: retryKeyboard(plate) } : undefined);
 	}
 });
 

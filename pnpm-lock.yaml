@@ -36,8 +36,8 @@ importers:
         specifier: 2.7.0
         version: 2.7.0
       supra.ts:
-        specifier: 1.1.0
-        version: 1.1.0
+        specifier: 1.2.1
+        version: 1.2.1
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.5.2
@@ -671,8 +671,8 @@ packages:
     resolution: {integrity: sha512-4gB8na07fecVVkOI6Rs4e7T6NOTki5EmL7TUduTs6bu3EdnSycntVJ4re8kgZA+wx9IueI2Y11bfbgwtzuE0KQ==}
     engines: {node: '>=0.10.0'}
 
-  supra.ts@1.1.0:
-    resolution: {integrity: sha512-5BAXudaSqeH2/+5zD9VQ0QqtHLNDhJ6T9GM3PX/rLRFSk6c2n2J4UFRTZM76AtzTZEFY/0Ccra+mrkF1Hoaa8Q==}
+  supra.ts@1.2.1:
+    resolution: {integrity: sha512-NdQhRX70SCt5K1IWhvhDnH1Wf/nsbfWaY0qm/uA9RGbq0vhmNvA0Covd3Q4HObEa2viPmArAF/Ke3HxSiKaPXg==}
     engines: {node: '>=24'}
 
   tar-fs@2.1.5:
@@ -1211,7 +1211,7 @@ snapshots:
 
   strip-json-comments@2.0.1: {}
 
-  supra.ts@1.1.0:
+  supra.ts@1.2.1:
     dependencies:
       camoufox-js: 0.11.1(playwright-core@1.61.1)
       playwright-core: 1.61.1
