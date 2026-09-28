@@ -30,9 +30,19 @@ fs.rmSync(TMP_DIR, { recursive: true, force: true });
 const bot = new Bot<MyContext>(process.env.TELEGRAM_TOKEN!);
 bot.api.config.use(hydrateFiles(bot.token));
 
-const supra = new Supra({
-	headless: process.env.NODE_ENV !== "dev",
-});
+const proxies = process.env.PROXIES
+	? process.env.PROXIES.split(",").map((p) => p.trim()).filter(Boolean)
+	: [];
+
+function createSupra() {
+	const proxy = proxies.length
+		? proxies[Math.floor(Math.random() * proxies.length)]
+		: undefined;
+	return new Supra({
+		headless: process.env.NODE_ENV !== "dev",
+		camoufoxOptions: proxy ? { proxy } : undefined,
+	});
+}
 
 let processing = false;
 
@@ -84,6 +94,7 @@ async function searchPlate(
 	}
 
 	processing = true;
+	const supra = createSupra();
 	try {
 		const search = supra.search(licensePlate);
 		search.catch(() => {});
